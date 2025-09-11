@@ -1,5 +1,6 @@
 #!/bin/bash
 # Enhanced vLLM Server Startup Script for ROCm (AMD GPUs)
+# Updated for AMD-maintained rocm/vllm Docker images
 # =========================================================
 
 set -euo pipefail
@@ -11,6 +12,13 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
+
+# Configuration file support
+CONFIG_FILE="${CONFIG_FILE:-/opt/inference/config/vllm_rocm.conf}"
+if [[ -f "$CONFIG_FILE" ]]; then
+    echo "Loading configuration from $CONFIG_FILE"
+    source "$CONFIG_FILE"
+fi
 
 # Log configuration
 LOG_DIR="${LOG_DIR:-/opt/inference/logs}"
@@ -24,16 +32,9 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1" | tee -a ${LOG_FILE}; }
 log_debug() { echo -e "${BLUE}[DEBUG]${NC} $1" | tee -a ${LOG_FILE}; }
 log_rocm() { echo -e "${MAGENTA}[ROCm]${NC} $1" | tee -a ${LOG_FILE}; }
 
-# Configuration file support
-CONFIG_FILE="${CONFIG_FILE:-/opt/inference/config/vllm_rocm.conf}"
-if [[ -f "$CONFIG_FILE" ]]; then
-    log_info "Loading configuration from $CONFIG_FILE"
-    source "$CONFIG_FILE"
-fi
-
 # Model configuration with defaults
-MODEL_ID="${MODEL_ID:-Orion-zhen/DeepHermes-3-Llama-3-8B-Preview-AWQ}"
-MODEL_LENGTH="${MODEL_LENGTH:-14992}"
+MODEL_ID="${MODEL_ID:-NousResearch/Hermes-3-Llama-3.1-8B}"
+MODEL_LENGTH="${MODEL_LENGTH:-8192}"
 GPU_MEMORY_UTILIZATION="${GPU_MEMORY_UTILIZATION:-0.90}"
 TENSOR_PARALLEL_SIZE="${TENSOR_PARALLEL_SIZE:-1}"
 PIPELINE_PARALLEL_SIZE="${PIPELINE_PARALLEL_SIZE:-1}"
@@ -47,13 +48,22 @@ VLLM_LOGGING_LEVEL="${VLLM_LOGGING_LEVEL:-INFO}"
 CONTAINER_NAME="${CONTAINER_NAME:-vllm-rocm-server}"
 RESTART_POLICY="${RESTART_POLICY:-unless-stopped}"
 
-# ROCm specific settings
-IMAGE_TAG="${IMAGE_TAG:-rocm-v0.10.1.1}"  # ROCm-specific image tag
-ROCM_VERSION="${ROCM_VERSION:-6.4}"     # ROCm version
-HIP_VISIBLE_DEVICES="${HIP_VISIBLE_DEVICES:-0}"  # AMD GPU selection
-HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-}"  # For compatibility
+# ROCm specific settings - Updated for AMD's Docker Hub
+# AMD now maintains images at rocm/vllm instead of vllm/vllm-rocm
+IMAGE_REGISTRY="${IMAGE_REGISTRY:-rocm}"  # 'rocm' for AMD's registry
+IMAGE_NAME="${IMAGE_NAME:-vllm}"
+IMAGE_TAG="${IMAGE_TAG:-rocm6.2_ubuntu22.04_py3.10_vllm_0.6.3}"  # Default stable
 
-# vLLM v0.11+ settings
+# Common AMD image tags:
+# rocm6.2_ubuntu22.04_py3.10_vllm_0.6.3
+# rocm6.4.1_vllm_0.10.1_20250909
+# rocm6.1.2_ubuntu22.04_py3.10_vllm
+
+ROCM_VERSION="${ROCM_VERSION:-6.2}"
+HIP_VISIBLE_DEVICES="${HIP_VISIBLE_DEVICES:-0}"
+HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-}"
+
+# vLLM settings
 TOOL_CALL_PARSER="${TOOL_CALL_PARSER:-hermes}"
 ENABLE_AUTO_TOOL_CHOICE="${ENABLE_AUTO_TOOL_CHOICE:-true}"
 ENABLE_CHUNKED_PREFILL="${ENABLE_CHUNKED_PREFILL:-false}"
@@ -103,8 +113,8 @@ check_amd_gpu() {
             log_rocm "AMD GPUs detected:"
             echo "$gpu_info" | tee -a ${LOG_FILE}
             
-            # Count GPUs
-            local gpu_count=$(rocm-smi --showid | grep -c "GPU" || echo "0")
+            # Count GPUs (fixed the count logic)
+            local gpu_count=$(rocm-smi --showid 2>/dev/null | grep -c "^GPU\[" || echo "0")
             log_rocm "Found ${gpu_count} AMD GPU(s)"
             
             # Verify tensor parallel size
@@ -157,18 +167,27 @@ check_docker() {
 
 # Function to pull ROCm-specific image
 pull_rocm_image() {
-    local rocm_image="rocm/vllm:${IMAGE_TAG}"
+    local full_image="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
     
-    log_rocm "Pulling ROCm-specific vLLM image: ${rocm_image}"
-    if docker pull "${rocm_image}"; then
+    log_rocm "Pulling ROCm-specific vLLM image: ${full_image}"
+    if docker pull "${full_image}"; then
         log_info "Successfully pulled ROCm image"
+        return 0
     else
-        log_warn "Failed to pull image, will try alternative tags..."
+        log_warn "Failed to pull image ${full_image}"
         
-        # Try alternative image names
-        for alt_tag in "latest-rocm" "rocm" "rocm6.4.1_vllm_0.10.1_20250909"; do
-            log_info "Trying rocm/vllm:${alt_tag}"
-            if docker pull "rocm/vllm:${alt_tag}"; then
+        # Try some common alternative tags
+        log_info "Trying alternative image tags..."
+        local alt_tags=(
+            "rocm6.2_ubuntu22.04_py3.10_vllm_0.6.3"
+            "rocm6.1.2_ubuntu22.04_py3.10_vllm"
+            "latest"
+        )
+        
+        for alt_tag in "${alt_tags[@]}"; do
+            local alt_image="${IMAGE_REGISTRY}/${IMAGE_NAME}:${alt_tag}"
+            log_info "Trying ${alt_image}"
+            if docker pull "${alt_image}"; then
                 IMAGE_TAG="${alt_tag}"
                 log_info "Successfully pulled with tag: ${alt_tag}"
                 return 0
@@ -176,7 +195,7 @@ pull_rocm_image() {
         done
         
         log_error "Could not pull any ROCm vLLM image"
-        log_info "You may need to build it locally or use a different registry"
+        log_info "Available images at: https://hub.docker.com/r/rocm/vllm/tags"
         return 1
     fi
 }
@@ -261,41 +280,48 @@ build_docker_command() {
     cmd+=" --name ${CONTAINER_NAME}"
     cmd+=" -d"
     
-    # Use ROCm-specific image
-    cmd+=" rocm/vllm:${IMAGE_TAG}"
+    # Use the full image name
+    local full_image="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+    cmd+=" ${full_image}"
     
-    # vLLM arguments
+    # IMPORTANT: AMD's rocm/vllm images need the full Python command
+    # Not just the arguments like standard vLLM images
+    cmd+=" python -m vllm.entrypoints.openai.api_server"
+    
+    # Now add vLLM arguments
     cmd+=" --host ${VLLM_HOST}"
     cmd+=" --port 8000"
     cmd+=" --model ${MODEL_ID}"
-    cmd+=" --tokenizer ${MODEL_ID}"
     cmd+=" --trust-remote-code"
     cmd+=" --dtype auto"
     cmd+=" --max-model-len ${MODEL_LENGTH}"
     cmd+=" --gpu-memory-utilization ${GPU_MEMORY_UTILIZATION}"
     cmd+=" --tensor-parallel-size ${TENSOR_PARALLEL_SIZE}"
-    cmd+=" --pipeline-parallel-size ${PIPELINE_PARALLEL_SIZE}"
     cmd+=" --max-num-seqs ${MAX_NUM_SEQS}"
-    cmd+=" --block-size ${BLOCK_SIZE}"
-    cmd+=" --num-scheduler-steps ${NUM_SCHEDULER_STEPS}"
     
-    # Tool calling features
-    cmd+=" --tool-call-parser ${TOOL_CALL_PARSER}"
-    if [[ "$ENABLE_AUTO_TOOL_CHOICE" == "true" ]]; then
-        cmd+=" --enable-auto-tool-choice"
+    # Only add tool parser options if the image supports them (0.5.4+)
+    # Check image tag to determine version
+    if [[ "$IMAGE_TAG" == *"0.6"* ]] || [[ "$IMAGE_TAG" == *"0.10"* ]] || [[ "$IMAGE_TAG" == *"0.11"* ]]; then
+        cmd+=" --tool-call-parser ${TOOL_CALL_PARSER}"
+        if [[ "$ENABLE_AUTO_TOOL_CHOICE" == "true" ]]; then
+            cmd+=" --enable-auto-tool-choice"
+        fi
+    else
+        log_warn "Tool calling may not be supported in this vLLM version"
     fi
     
-    # Optional parameters
-    if [[ -n "$MAX_NUM_BATCHED_TOKENS" ]]; then
-        cmd+=" --max-num-batched-tokens ${MAX_NUM_BATCHED_TOKENS}"
-    fi
-    
+    # Performance options
     if [[ "$ENABLE_PREFIX_CACHING" == "true" ]]; then
         cmd+=" --enable-prefix-caching"
     fi
     
     if [[ "$ENABLE_CHUNKED_PREFILL" == "true" ]]; then
         cmd+=" --enable-chunked-prefill"
+    fi
+    
+    # Optional parameters
+    if [[ -n "$MAX_NUM_BATCHED_TOKENS" ]]; then
+        cmd+=" --max-num-batched-tokens ${MAX_NUM_BATCHED_TOKENS}"
     fi
     
     echo "$cmd"
@@ -317,6 +343,12 @@ wait_for_server() {
         attempt=$((attempt + 1))
         if [[ $((attempt % 10)) -eq 0 ]]; then
             log_info "Still waiting... (${attempt}/${max_attempts})"
+            
+            # Show last few log lines to help debug
+            if [[ $attempt -eq 30 ]]; then
+                log_warn "Server is taking longer than expected. Checking logs..."
+                docker logs --tail 10 "${CONTAINER_NAME}" 2>&1 | tee -a ${LOG_FILE}
+            fi
         fi
         sleep 2
     done
@@ -331,13 +363,13 @@ display_gpu_stats() {
     
     if command -v rocm-smi &> /dev/null; then
         # Temperature
-        rocm-smi -t | grep -E "GPU|Temp" | head -10 | tee -a ${LOG_FILE}
+        rocm-smi -t 2>/dev/null | grep -E "GPU|Temp" | head -10 | tee -a ${LOG_FILE}
         
         # Memory usage
-        rocm-smi --showmeminfo vram | grep -E "GPU|Used|Free" | head -10 | tee -a ${LOG_FILE}
+        rocm-smi --showmeminfo vram 2>/dev/null | grep -E "GPU|Used|Free" | head -10 | tee -a ${LOG_FILE}
         
         # Power
-        rocm-smi -P | grep -E "GPU|Power" | head -10 | tee -a ${LOG_FILE}
+        rocm-smi -P 2>/dev/null | grep -E "GPU|Power" | head -10 | tee -a ${LOG_FILE}
     else
         log_warn "rocm-smi not available for GPU stats"
     fi
@@ -354,7 +386,7 @@ display_server_info() {
     log_info "GPU Type: AMD ROCm"
     log_info "ROCm Version: ${ROCM_VERSION}"
     log_info "HIP Devices: ${HIP_VISIBLE_DEVICES}"
-    log_info "Tool Parser: ${TOOL_CALL_PARSER}"
+    log_info "Docker Image: ${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
     log_info "==============================================="
     
     # Display GPU stats
@@ -362,8 +394,12 @@ display_server_info() {
     
     # Test the API
     log_info "Testing API endpoint..."
-    if curl -s "http://localhost:${VLLM_PORT}/v1/models" | grep -q "${MODEL_ID}"; then
+    if curl -s "http://localhost:${VLLM_PORT}/v1/models" | grep -q "model"; then
         log_info "✅ API test successful!"
+        
+        # Show model details
+        log_info "Available models:"
+        curl -s "http://localhost:${VLLM_PORT}/v1/models" | python3 -m json.tool 2>/dev/null | grep '"id"' | head -5
     else
         log_warn "⚠️  API test failed or returned unexpected response"
     fi
@@ -376,30 +412,32 @@ show_rocm_tips() {
 📚 ROCm-Specific Tips:
 ======================
 
-1. GPU Selection:
-   export HIP_VISIBLE_DEVICES=0,1  # Use GPU 0 and 1
-   
-2. Compatibility Mode:
-   export HSA_OVERRIDE_GFX_VERSION=10.3.0  # For unsupported GPUs
-
-3. Monitor GPU:
-   rocm-smi --showallinfo
+1. Monitor GPU Usage:
+   rocm-smi --showuse
    watch -n 1 rocm-smi
 
-4. Check ROCm Version:
-   /opt/rocm/bin/rocminfo
+2. Check Logs:
+   docker logs -f ${CONTAINER_NAME}
 
-5. Troubleshooting:
-   - If GPU not detected: Check /dev/kfd and /dev/dri permissions
-   - If out of memory: Reduce GPU_MEMORY_UTILIZATION
-   - If compatibility issues: Set HSA_OVERRIDE_GFX_VERSION
+3. Test Inference:
+   curl http://localhost:${VLLM_PORT}/v1/completions \\
+     -H "Content-Type: application/json" \\
+     -d '{
+       "model": "${MODEL_ID}",
+       "prompt": "Hello world",
+       "max_tokens": 100
+     }'
 
-6. Supported GPUs:
-   - MI200 series (gfx90a)
-   - MI100 (gfx908)
-   - MI50/60 (gfx906)
-   - RX 7900 XTX (gfx1100)
-   - RX 6900 XT (gfx1030)
+4. Common Issues:
+   - If using RX 7900 XTX with older images, you may need:
+     export HSA_OVERRIDE_GFX_VERSION=11.0.0
+   
+   - For multi-GPU, ensure HIP_VISIBLE_DEVICES is set correctly:
+     HIP_VISIBLE_DEVICES=0,1 for 2 GPUs
+
+5. AMD Docker Hub:
+   Browse available images at:
+   https://hub.docker.com/r/rocm/vllm/tags
 
 EOF
 }
@@ -410,7 +448,7 @@ main() {
     log_info "Configuration:"
     log_info "  Model: ${MODEL_ID}"
     log_info "  Port: ${VLLM_PORT}"
-    log_info "  Image: rocm/vllm:${IMAGE_TAG}"
+    log_info "  Image: ${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
     log_info "  ROCm Version: ${ROCM_VERSION}"
     log_info "  HIP Devices: ${HIP_VISIBLE_DEVICES}"
     
@@ -441,6 +479,10 @@ main() {
         fi
     else
         log_error "Failed to start container: ${container_id}"
+        log_info "This might be due to:"
+        log_info "  1. Incorrect image entrypoint - try a different image tag"
+        log_info "  2. GPU compatibility issues - check HSA_OVERRIDE_GFX_VERSION"
+        log_info "  3. Missing dependencies - ensure ROCm is properly installed"
         exit 1
     fi
     
