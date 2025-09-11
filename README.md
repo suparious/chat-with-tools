@@ -332,7 +332,7 @@ Chat with Tools/
 
 MIT License with Commercial Attribution Requirement
 
-**For products with 100K+ users**: Please include attribution to Pietro Schirano and mention the "Chat with Tools" framework in your documentation or credits.
+**For products with 100K+ users**: Please include attribution to Pietro Schirano and mention the "Make It Heavy" framework in your documentation or credits.
 
 See [LICENSE](LICENSE) file for full details.
 
