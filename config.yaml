@@ -1,8 +1,7 @@
 # OpenRouter API settings
 openrouter:
   api_key: ""
-  #base_url: "http://zelus.hq.solidrust.net:8081/v1"
-  base_url: "https://artemis.hq.solidrust.net/v1"
+  base_url: "http://localhost:8081/v1"
   
   # IMPORTANT: When selecting a model, ensure it has a high context window (200k+ tokens recommended)
   # The orchestrator can generate large amounts of results from multiple agents that need to be

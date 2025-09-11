@@ -1,0 +1,172 @@
+# vLLM ROCm Server Configuration File
+# =====================================
+# Configuration for AMD GPUs with ROCm
+# Place at: /opt/inference/config/vllm_rocm.conf
+
+# Model Configuration
+# -------------------
+MODEL_ID="Orion-zhen/DeepHermes-3-Llama-3-8B-Preview-AWQ"
+MODEL_LENGTH="14992"
+
+# GPU Configuration (AMD-specific)
+# ---------------------------------
+GPU_MEMORY_UTILIZATION="0.90"
+TENSOR_PARALLEL_SIZE="1"
+PIPELINE_PARALLEL_SIZE="1"
+
+# AMD GPU Selection
+# Use HIP_VISIBLE_DEVICES to select specific GPUs
+# Examples:
+#   "0"     - Use first GPU only
+#   "0,1"   - Use first two GPUs
+#   "1,2,3" - Use GPUs 1, 2, and 3
+HIP_VISIBLE_DEVICES="0"
+
+# ROCm Compatibility
+# ------------------
+ROCM_VERSION="6.0"  # Your ROCm version (5.7, 6.0, 6.1, etc.)
+
+# For GPUs not officially supported, override the architecture
+# Common values:
+#   gfx906  - MI50/MI60
+#   gfx908  - MI100
+#   gfx90a  - MI200 series
+#   gfx1030 - RX 6900 XT, RX 6800
+#   gfx1100 - RX 7900 XTX
+#   gfx1101 - RX 7900 XT
+#   gfx1102 - RX 7800 XT
+# HSA_OVERRIDE_GFX_VERSION="10.3.0"  # Uncomment if needed
+
+# Server Configuration
+# --------------------
+VLLM_PORT="8081"
+VLLM_HOST="0.0.0.0"
+VLLM_LOGGING_LEVEL="INFO"
+CONTAINER_NAME="vllm-rocm-server"
+RESTART_POLICY="unless-stopped"
+
+# vLLM v0.11+ Features
+# --------------------
+IMAGE_TAG="rocm-v0.10.1.1"  # ROCm-specific image tags
+# Alternative tags:
+#   "latest-rocm"     - Latest ROCm build
+#   "v0.11.0-rocm"    - Specific version
+#   "rocm"            - Stable ROCm build
+
+TOOL_CALL_PARSER="hermes"
+ENABLE_AUTO_TOOL_CHOICE="true"
+ENABLE_CHUNKED_PREFILL="false"
+
+# Performance Tuning (AMD-optimized)
+# -----------------------------------
+MAX_NUM_SEQS="64"
+BLOCK_SIZE="16"
+NUM_SCHEDULER_STEPS="1"
+
+# Prefix caching can help with repeated prompts
+ENABLE_PREFIX_CACHING="false"
+
+# KV cache data type
+# For AMD GPUs, "auto" usually works best
+# Can also try "fp16" for better memory usage
+KV_CACHE_DTYPE="auto"
+
+# API Settings
+# ------------
+# API_KEY=""  # Optional API key
+RESPONSE_ROLE="assistant"
+
+# Cache Directories
+# -----------------
+HF_CACHE="/home/shaun/.cache/huggingface"
+VLLM_CACHE="/opt/inference/cache"
+DOWNLOAD_DIR="/opt/inference/downloads"
+
+# Logging
+# -------
+LOG_DIR="/opt/inference/logs"
+
+# ============================================
+# AMD GPU-Specific Model Configurations
+# ============================================
+
+# For Llama models on AMD:
+# ------------------------
+# MODEL_ID="meta-llama/Llama-2-7b-chat-hf"
+# MODEL_LENGTH="4096"
+# GPU_MEMORY_UTILIZATION="0.85"  # Slightly lower for stability
+
+# For Mistral models on AMD:
+# --------------------------
+# MODEL_ID="mistralai/Mistral-7B-Instruct-v0.2"
+# MODEL_LENGTH="32768"
+# GPU_MEMORY_UTILIZATION="0.88"
+
+# For larger models (13B+) on single MI100/MI200:
+# -----------------------------------------------
+# MODEL_ID="meta-llama/Llama-2-13b-chat-hf"
+# MODEL_LENGTH="4096"
+# GPU_MEMORY_UTILIZATION="0.92"
+# KV_CACHE_DTYPE="fp16"  # Save memory
+
+# For multi-GPU setups (MI200 series):
+# ------------------------------------
+# TENSOR_PARALLEL_SIZE="2"
+# HIP_VISIBLE_DEVICES="0,1"
+# GPU_MEMORY_UTILIZATION="0.95"
+
+# ============================================
+# ROCm Performance Profiles
+# ============================================
+
+# Profile 1: Maximum Throughput (MI200)
+# --------------------------------------
+# MAX_NUM_SEQS="256"
+# MAX_NUM_BATCHED_TOKENS="16384"
+# GPU_MEMORY_UTILIZATION="0.95"
+# ENABLE_PREFIX_CACHING="true"
+# KV_CACHE_DTYPE="fp16"
+
+# Profile 2: Low Latency (RX 7900 XTX)
+# -------------------------------------
+# MAX_NUM_SEQS="16"
+# MAX_NUM_BATCHED_TOKENS="2048"
+# GPU_MEMORY_UTILIZATION="0.80"
+# NUM_SCHEDULER_STEPS="1"
+
+# Profile 3: Memory Optimized (RX 6900 XT)
+# -----------------------------------------
+# GPU_MEMORY_UTILIZATION="0.75"
+# KV_CACHE_DTYPE="fp16"
+# MAX_NUM_SEQS="32"
+# BLOCK_SIZE="8"
+
+# ============================================
+# Troubleshooting Settings
+# ============================================
+
+# If you get "GPU not supported" errors:
+# ---------------------------------------
+# 1. Find your GPU architecture:
+#    rocminfo | grep "Name"
+#
+# 2. Set override:
+#    HSA_OVERRIDE_GFX_VERSION="your_version"
+#
+# 3. Common overrides:
+#    RX 6800/6900 XT  -> HSA_OVERRIDE_GFX_VERSION="10.3.0"
+#    RX 7900 XTX      -> HSA_OVERRIDE_GFX_VERSION="11.0.0"
+#    Older cards      -> HSA_OVERRIDE_GFX_VERSION="9.0.0"
+
+# If you get out of memory errors:
+# ---------------------------------
+# 1. Reduce GPU_MEMORY_UTILIZATION to 0.80
+# 2. Reduce MAX_NUM_SEQS to 32 or 16
+# 3. Use KV_CACHE_DTYPE="fp16"
+# 4. Reduce MODEL_LENGTH if possible
+
+# If inference is slow:
+# ---------------------
+# 1. Enable ENABLE_PREFIX_CACHING="true"
+# 2. Increase NUM_SCHEDULER_STEPS to 2 or 4
+# 3. Check GPU clock speeds: rocm-smi --showclocks

@@ -1,0 +1,128 @@
+# vLLM Server Configuration File
+# ================================
+# Place this file at /opt/inference/config/vllm.conf
+# Or set CONFIG_FILE environment variable to point to it
+
+# Model Configuration
+# -------------------
+MODEL_ID="Orion-zhen/DeepHermes-3-Llama-3-8B-Preview-AWQ"
+MODEL_LENGTH="14992"
+
+# GPU Configuration
+# -----------------
+GPU_MEMORY_UTILIZATION="0.90"
+TENSOR_PARALLEL_SIZE="1"
+PIPELINE_PARALLEL_SIZE="1"
+# CUDA_VISIBLE_DEVICES="0,1"  # Uncomment to specify GPUs
+
+# Server Configuration
+# --------------------
+VLLM_PORT="8081"
+VLLM_HOST="0.0.0.0"
+VLLM_LOGGING_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR
+CONTAINER_NAME="vllm-server"
+RESTART_POLICY="unless-stopped"  # no, always, unless-stopped, on-failure
+
+# vLLM v0.11+ Features
+# --------------------
+IMAGE_TAG="v0.10.1.1"
+TOOL_CALL_PARSER="hermes"  # hermes, mistral, or custom
+ENABLE_AUTO_TOOL_CHOICE="true"
+ENABLE_CHUNKED_PREFILL="false"  # Experimental feature
+# MAX_NUM_SCHEDULED_SPLITS="4"  # For chunked prefill
+
+# Performance Tuning
+# ------------------
+MAX_NUM_SEQS="64"
+# MAX_NUM_BATCHED_TOKENS="8192"  # Auto-calculated if not set
+BLOCK_SIZE="16"
+NUM_SCHEDULER_STEPS="1"
+ENABLE_PREFIX_CACHING="false"  # Can improve performance for repeated prefixes
+KV_CACHE_DTYPE="auto"  # auto, fp8, fp8_e5m2, fp8_e4m3
+
+# API Security (Optional)
+# -----------------------
+# API_KEY="your-secret-api-key"  # Requires authentication if set
+# SERVED_MODEL_NAME="gpt-3.5-turbo"  # Custom name in API responses
+RESPONSE_ROLE="assistant"
+
+# Custom Chat Template (Optional)
+# -------------------------------
+# CHAT_TEMPLATE="/opt/inference/templates/custom_chat.jinja2"
+
+# Cache Directories
+# -----------------
+HF_CACHE="/home/shaun/.cache/huggingface"
+VLLM_CACHE="/opt/inference/cache"
+DOWNLOAD_DIR="/opt/inference/downloads"
+
+# Logging
+# -------
+LOG_DIR="/opt/inference/logs"
+
+# Offline Mode (Optional)
+# -----------------------
+# HF_HUB_OFFLINE="1"  # Use cached models only
+
+# Quantization (Optional)
+# -----------------------
+# QUANTIZATION_PARAM_PATH="/path/to/quantization/params.json"
+
+# ============================================
+# Model-Specific Configurations
+# ============================================
+
+# For Llama models:
+# -----------------
+# MODEL_ID="meta-llama/Llama-2-7b-chat-hf"
+# MODEL_LENGTH="4096"
+# TOOL_CALL_PARSER="hermes"
+
+# For Mistral models:
+# -------------------
+# MODEL_ID="mistralai/Mistral-7B-Instruct-v0.2"
+# MODEL_LENGTH="32768"
+# TOOL_CALL_PARSER="mistral"
+
+# For Mixtral models:
+# -------------------
+# MODEL_ID="mistralai/Mixtral-8x7B-Instruct-v0.1"
+# MODEL_LENGTH="32768"
+# TENSOR_PARALLEL_SIZE="2"  # Recommended for MoE models
+
+# For Qwen models:
+# ----------------
+# MODEL_ID="Qwen/Qwen2-72B-Instruct"
+# MODEL_LENGTH="32768"
+# TENSOR_PARALLEL_SIZE="4"
+
+# For Yi models:
+# --------------
+# MODEL_ID="01-ai/Yi-34B-Chat"
+# MODEL_LENGTH="4096"
+# GPU_MEMORY_UTILIZATION="0.95"
+
+# ============================================
+# Performance Profiles
+# ============================================
+
+# High Throughput Profile:
+# ------------------------
+# MAX_NUM_SEQS="256"
+# MAX_NUM_BATCHED_TOKENS="16384"
+# GPU_MEMORY_UTILIZATION="0.95"
+# ENABLE_PREFIX_CACHING="true"
+
+# Low Latency Profile:
+# --------------------
+# MAX_NUM_SEQS="16"
+# MAX_NUM_BATCHED_TOKENS="2048"
+# NUM_SCHEDULER_STEPS="1"
+# GPU_MEMORY_UTILIZATION="0.85"
+
+# Memory Optimized Profile:
+# -------------------------
+# GPU_MEMORY_UTILIZATION="0.80"
+# KV_CACHE_DTYPE="fp8"
+# MAX_NUM_SEQS="32"
+# BLOCK_SIZE="8"
