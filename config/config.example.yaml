@@ -1,0 +1,225 @@
+# Chat with Tools Framework Configuration
+# Copy this file to config.yaml and add your API key
+
+# OpenRouter API Configuration
+openrouter:
+  # Get your API key at: https://openrouter.ai/keys
+  api_key: "YOUR API KEY HERE"
+  
+  # Base URL for OpenRouter API (usually doesn't need changing)
+  base_url: "https://openrouter.ai/api/v1"
+  
+  # Model to use - any OpenRouter-compatible model
+  # Popular options:
+  #   - openai/gpt-4-mini (balanced)
+  #   - openai/gpt-3.5-turbo (fast & cheap)
+  #   - anthropic/claude-3.5-sonnet (best reasoning)
+  #   - google/gemini-2.0-flash-001 (very fast)
+  #   - meta-llama/llama-3.1-70b (open source)
+  model: "openai/gpt-4-mini"
+  
+  # Temperature for responses (0.0 = deterministic, 1.0 = creative)
+  temperature: 0.7
+  
+  # Maximum tokens per response
+  max_tokens: 2000
+
+# Single Agent Configuration
+agent:
+  # Maximum number of tool calls per query
+  max_iterations: 10
+  
+  # Show tool execution details
+  verbose: false
+  
+  # Silent mode (suppress all tool output)
+  silent: false
+
+# Multi-Agent Orchestrator Configuration
+orchestrator:
+  # Number of parallel agents in council mode
+  parallel_agents: 4
+  
+  # Timeout per agent (seconds)
+  task_timeout: 300
+  
+  # Show detailed progress
+  verbose: true
+  
+  # Dynamic question generation prompt
+  question_generation_prompt: |
+    You are an orchestrator that needs to create {num_agents} different questions 
+    to thoroughly analyze the user's query from multiple perspectives.
+    
+    Create questions that:
+    1. Cover different aspects of the topic
+    2. Use different analytical approaches
+    3. Provide complementary insights
+    4. Don't significantly overlap
+    
+    User query: {query}
+    
+    Generate exactly {num_agents} questions:
+  
+  # Response synthesis prompt
+  synthesis_prompt: |
+    You have {num_responses} different AI agents that analyzed the same query 
+    from different perspectives. Synthesize their responses into one comprehensive answer.
+    
+    Requirements:
+    1. Combine all unique insights
+    2. Resolve any contradictions
+    3. Present a unified, coherent response
+    4. Maintain factual accuracy
+    5. Be comprehensive but concise
+    
+    Original query: {query}
+    
+    Agent responses:
+    {responses}
+    
+    Synthesized response:
+
+# Tool Configuration
+tools:
+  # Web search settings
+  search:
+    # Maximum results per search
+    max_results: 5
+    
+    # User agent for web requests
+    user_agent: "Mozilla/5.0 (compatible; ChatWithTools/1.0)"
+    
+    # Search engine (duckduckgo or google)
+    engine: "duckduckgo"
+  
+  # File operations settings
+  file:
+    # Maximum file size to read (bytes)
+    max_file_size: 1048576  # 1MB
+    
+    # Allowed file extensions
+    allowed_extensions: [".txt", ".md", ".json", ".yaml", ".py", ".js", ".html", ".css"]
+    
+    # Sandbox directory for file operations
+    sandbox_dir: "./workspace"
+  
+  # Python executor settings
+  python_executor:
+    # Execution timeout (seconds)
+    timeout: 5
+    
+    # Maximum memory usage (MB)
+    max_memory_mb: 100
+    
+    # Allow network access
+    allow_network: false
+    
+    # Allow file system access
+    allow_filesystem: true
+  
+  # Memory tool settings
+  memory:
+    # Storage path for memories
+    storage_path: "./agent_memory"
+    
+    # Maximum memories to store
+    max_memories: 1000
+    
+    # Auto-cleanup old memories
+    auto_cleanup: true
+    
+    # Cleanup threshold (days)
+    cleanup_days: 30
+  
+  # Sequential thinking settings
+  sequential_thinking:
+    # Maximum thoughts per session
+    max_thoughts: 50
+    
+    # Allow thought revision
+    allow_revision: true
+    
+    # Allow branching
+    allow_branching: true
+    
+    # Track confidence scores
+    track_confidence: true
+
+# Logging Configuration
+logging:
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  level: "INFO"
+  
+  # Log file path
+  file: "./logs/chat-with-tools.log"
+  
+  # Console output
+  console: true
+  
+  # Log format
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Performance Settings
+performance:
+  # Enable caching
+  enable_cache: true
+  
+  # Cache TTL (seconds)
+  cache_ttl: 3600
+  
+  # Connection pool size
+  pool_size: 10
+  
+  # Request timeout (seconds)
+  request_timeout: 30
+  
+  # Retry configuration
+  retry:
+    # Maximum retries
+    max_retries: 3
+    
+    # Backoff factor
+    backoff_factor: 2
+    
+    # Maximum backoff (seconds)
+    max_backoff: 60
+
+# Security Settings
+security:
+  # Enable input validation
+  validate_input: true
+  
+  # Maximum input length
+  max_input_length: 10000
+  
+  # Enable output sanitization
+  sanitize_output: true
+  
+  # Blocked patterns (regex)
+  blocked_patterns: []
+  
+  # Rate limiting
+  rate_limit:
+    # Requests per minute
+    requests_per_minute: 60
+    
+    # Enable rate limiting
+    enabled: false
+
+# Development Settings
+development:
+  # Debug mode
+  debug: false
+  
+  # Profile performance
+  profile: false
+  
+  # Mock API calls (for testing)
+  mock_api: false
+  
+  # Save API responses
+  save_responses: false
+  
+  # Response directory
+  response_dir: "./debug/responses"
