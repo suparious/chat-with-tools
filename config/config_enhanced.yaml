@@ -209,3 +209,15 @@ development:
   
   # History directory
   history_dir: "./chat_history"
+
+# Debug logging settings
+debug:
+  enabled: false  # Set to true to enable debug logging to disk
+  log_path: "./logs"  # Directory where log files will be stored
+  log_level: "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR
+  max_log_size_mb: 10  # Maximum size of each log file in MB
+  max_log_files: 5  # Maximum number of log files to keep (rotation)
+  include_timestamps: true  # Include detailed timestamps in logs
+  log_tool_calls: true  # Log all tool invocations and results
+  log_llm_calls: true  # Log LLM API calls and responses
+  log_agent_thoughts: true  # Log agent reasoning and iterations

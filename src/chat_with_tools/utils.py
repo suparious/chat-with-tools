@@ -1,10 +1,14 @@
 """Utility functions for the Chat with Tools framework."""
 
+import json
 import logging
+import logging.handlers
 import os
 import time
+from datetime import datetime
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar, Union
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional, TypeVar, Union
 from urllib.parse import urlparse
 
 # Type variable for generic decorator
@@ -303,3 +307,194 @@ class MetricsCollector:
             'avg_response_time': avg_response_time,
             'total_response_time': sum(self.metrics['response_times'])
         }
+
+
+class DebugLogger:
+    """Debug logger for framework debugging and troubleshooting."""
+    
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls, config: Optional[Dict[str, Any]] = None):
+        """Singleton pattern to ensure only one debug logger instance."""
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+    
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        """Initialize the debug logger with configuration."""
+        if self._initialized:
+            return
+            
+        self.config = config or {}
+        self.debug_config = self.config.get('debug', {})
+        self.enabled = self.debug_config.get('enabled', False)
+        self.logger = None
+        
+        if self.enabled:
+            self._setup_logger()
+        
+        self._initialized = True
+    
+    def _setup_logger(self) -> None:
+        """Set up the debug logger with file rotation."""
+        # Create logs directory if it doesn't exist
+        log_path = Path(self.debug_config.get('log_path', './logs'))
+        log_path.mkdir(parents=True, exist_ok=True)
+        
+        # Generate log filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        log_file = log_path / f"debug_{timestamp}.log"
+        
+        # Create logger
+        self.logger = logging.getLogger('chat_with_tools.debug')
+        self.logger.setLevel(getattr(logging, self.debug_config.get('log_level', 'DEBUG')))
+        self.logger.handlers.clear()
+        
+        # Create rotating file handler
+        max_bytes = self.debug_config.get('max_log_size_mb', 10) * 1024 * 1024
+        backup_count = self.debug_config.get('max_log_files', 5)
+        
+        file_handler = logging.handlers.RotatingFileHandler(
+            log_file,
+            maxBytes=max_bytes,
+            backupCount=backup_count
+        )
+        
+        # Create formatter with detailed information
+        formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S.%f'[:-3]  # Include milliseconds
+        )
+        
+        file_handler.setFormatter(formatter)
+        self.logger.addHandler(file_handler)
+        
+        # Log initialization
+        self.logger.info("=" * 80)
+        self.logger.info("Debug Logger Initialized")
+        self.logger.info(f"Log file: {log_file}")
+        self.logger.info(f"Debug config: {json.dumps(self.debug_config, indent=2)}")
+        self.logger.info("=" * 80)
+    
+    def log(self, level: str, message: str, **kwargs) -> None:
+        """Log a message if debug logging is enabled.
+        
+        Args:
+            level: Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+            message: Message to log
+            **kwargs: Additional key-value pairs to include in the log
+        """
+        if not self.enabled or not self.logger:
+            return
+        
+        # Add any additional context
+        if kwargs:
+            message = f"{message} | {json.dumps(kwargs, default=str)}"
+        
+        # Log at the appropriate level
+        log_method = getattr(self.logger, level.lower(), self.logger.info)
+        log_method(message)
+    
+    def debug(self, message: str, **kwargs) -> None:
+        """Log a debug message."""
+        self.log('DEBUG', message, **kwargs)
+    
+    def info(self, message: str, **kwargs) -> None:
+        """Log an info message."""
+        self.log('INFO', message, **kwargs)
+    
+    def warning(self, message: str, **kwargs) -> None:
+        """Log a warning message."""
+        self.log('WARNING', message, **kwargs)
+    
+    def error(self, message: str, **kwargs) -> None:
+        """Log an error message."""
+        self.log('ERROR', message, **kwargs)
+    
+    def log_agent_iteration(self, iteration: int, max_iterations: int, agent_id: Optional[str] = None) -> None:
+        """Log agent iteration information."""
+        if not self.enabled or not self.debug_config.get('log_agent_thoughts', True):
+            return
+        
+        self.info(
+            f"Agent Iteration",
+            iteration=iteration,
+            max_iterations=max_iterations,
+            agent_id=agent_id or "main"
+        )
+    
+    def log_tool_call(self, tool_name: str, arguments: Dict[str, Any], result: Any = None, error: Optional[str] = None) -> None:
+        """Log tool invocation and results."""
+        if not self.enabled or not self.debug_config.get('log_tool_calls', True):
+            return
+        
+        if error:
+            self.error(
+                f"Tool Call Failed: {tool_name}",
+                arguments=arguments,
+                error=error
+            )
+        else:
+            self.info(
+                f"Tool Call: {tool_name}",
+                arguments=arguments,
+                result_preview=str(result)[:500] if result else None
+            )
+    
+    def log_llm_call(self, model: str, messages: list, response: Optional[Any] = None, error: Optional[str] = None) -> None:
+        """Log LLM API calls and responses."""
+        if not self.enabled or not self.debug_config.get('log_llm_calls', True):
+            return
+        
+        # Summarize messages for logging
+        message_summary = [
+            {"role": msg.get("role"), "content_preview": str(msg.get("content", ""))[:200]}
+            for msg in messages[-3:]  # Only last 3 messages for brevity
+        ]
+        
+        if error:
+            self.error(
+                f"LLM Call Failed",
+                model=model,
+                messages=message_summary,
+                error=error
+            )
+        else:
+            response_preview = None
+            if response:
+                try:
+                    if hasattr(response, 'choices') and response.choices:
+                        content = response.choices[0].message.content
+                        response_preview = str(content)[:500] if content else "<no content>"
+                except:
+                    response_preview = str(response)[:500]
+            
+            self.info(
+                f"LLM Call",
+                model=model,
+                messages=message_summary,
+                response_preview=response_preview
+            )
+    
+    def log_orchestrator_task(self, task_id: str, status: str, details: Optional[Dict[str, Any]] = None) -> None:
+        """Log orchestrator task status."""
+        if not self.enabled:
+            return
+        
+        self.info(
+            f"Orchestrator Task",
+            task_id=task_id,
+            status=status,
+            details=details or {}
+        )
+    
+    def log_separator(self, title: Optional[str] = None) -> None:
+        """Log a separator line for better readability."""
+        if not self.enabled:
+            return
+        
+        if title:
+            self.info(f"{'=' * 30} {title} {'=' * 30}")
+        else:
+            self.info("=" * 80)

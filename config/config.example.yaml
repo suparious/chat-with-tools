@@ -26,6 +26,16 @@ openrouter:
   # Maximum tokens per response
   max_tokens: 2000
 
+# System prompt for the agent
+system_prompt: |
+  You are a helpful research assistant. When users ask questions that require 
+  current information or web search, use the search tool and all other tools available to find relevant 
+  information and provide comprehensive answers based on the results.
+  
+  IMPORTANT: When you have fully satisfied the user's request and provided a complete answer, 
+  you MUST call the mark_task_complete tool with a summary of what was accomplished and 
+  a final message for the user. This signals that the task is finished.
+
 # Single Agent Configuration
 agent:
   # Maximum number of tool calls per query
@@ -47,6 +57,8 @@ orchestrator:
   
   # Show detailed progress
   verbose: true
+
+  aggregation_strategy: "consensus"  # How to combine results
   
   # Dynamic question generation prompt
   question_generation_prompt: |
@@ -94,6 +106,9 @@ tools:
     
     # Search engine (duckduckgo or google)
     engine: "duckduckgo"
+    cache_ttl: 3600
+    max_content_length: 5000
+    request_timeout: 10
   
   # File operations settings
   file:
@@ -147,6 +162,17 @@ tools:
     
     # Track confidence scores
     track_confidence: true
+
+  # Python executor tool settings
+  code_execution:
+    timeout: 5
+    max_memory_mb: 100
+    allow_imports: false
+
+  # Summarization tool settings
+  summarization:
+    default_ratio: 0.3
+    max_summary_sentences: 10
 
 # Logging Configuration
 logging:
@@ -225,3 +251,15 @@ development:
   
   # Response directory
   response_dir: "./debug/responses"
+
+# Debug logging settings
+debug:
+  enabled: false  # Set to true to enable debug logging to disk
+  log_path: "./logs"  # Directory where log files will be stored
+  log_level: "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR
+  max_log_size_mb: 10  # Maximum size of each log file in MB
+  max_log_files: 5  # Maximum number of log files to keep (rotation)
+  include_timestamps: true  # Include detailed timestamps in logs
+  log_tool_calls: true  # Log all tool invocations and results
+  log_llm_calls: true  # Log LLM API calls and responses
+  log_agent_thoughts: true  # Log agent reasoning and iterations

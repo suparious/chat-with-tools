@@ -6,12 +6,18 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any
 from .agent import OpenRouterAgent
 from .config_manager import ConfigManager
+from .utils import DebugLogger
 
 class TaskOrchestrator:
     def __init__(self, config_path="config.yaml", silent=False):
         # Use centralized config manager
         self.config_manager = ConfigManager()
         self.config = self.config_manager.config
+        
+        # Initialize debug logger
+        self.debug_logger = DebugLogger(self.config)
+        self.debug_logger.log_separator("Orchestrator Initialization")
+        self.debug_logger.info("Initializing TaskOrchestrator", config_path=config_path, silent=silent)
         
         # Get orchestrator-specific config
         orchestrator_config = self.config_manager.get_orchestrator_config()
@@ -20,10 +26,16 @@ class TaskOrchestrator:
         self.aggregation_strategy = orchestrator_config['aggregation_strategy']
         self.silent = silent
         
+        self.debug_logger.info("Orchestrator configuration loaded",
+                               num_agents=self.num_agents,
+                               task_timeout=self.task_timeout,
+                               aggregation_strategy=self.aggregation_strategy)
+        
         # Track agent progress
         self.agent_progress = {}
         self.agent_results = {}
         self.progress_lock = threading.Lock()
+        self.debug_logger.info("Orchestrator initialization complete")
     
     def decompose_task(self, user_input: str, num_agents: int) -> List[str]:
         """Use AI to dynamically generate different questions based on user input"""
@@ -77,6 +89,8 @@ class TaskOrchestrator:
         Returns result dictionary with agent_id, status, and response.
         """
         try:
+            self.debug_logger.log_orchestrator_task(f"agent_{agent_id}", "STARTING", 
+                                                   {"subtask": subtask})
             self.update_agent_progress(agent_id, "PROCESSING...")
             
             # Use simple agent like in main.py
@@ -87,6 +101,9 @@ class TaskOrchestrator:
             execution_time = time.time() - start_time
             
             self.update_agent_progress(agent_id, "COMPLETED", response)
+            self.debug_logger.log_orchestrator_task(f"agent_{agent_id}", "COMPLETED",
+                                                   {"execution_time": execution_time,
+                                                    "response_length": len(response)})
             
             return {
                 "agent_id": agent_id,
@@ -97,6 +114,8 @@ class TaskOrchestrator:
             
         except Exception as e:
             # Simple error handling
+            self.debug_logger.log_orchestrator_task(f"agent_{agent_id}", "FAILED",
+                                                   {"error": str(e)})
             return {
                 "agent_id": agent_id,
                 "status": "error",
@@ -175,13 +194,17 @@ class TaskOrchestrator:
         Main orchestration method.
         Takes user input, delegates to parallel agents, and returns aggregated result.
         """
+        self.debug_logger.log_separator("Orchestration Started")
+        self.debug_logger.info("Starting orchestration", user_input=user_input)
         
         # Reset progress tracking
         self.agent_progress = {}
         self.agent_results = {}
         
         # Decompose task into subtasks
+        self.debug_logger.info("Decomposing task into subtasks")
         subtasks = self.decompose_task(user_input, self.num_agents)
+        self.debug_logger.info(f"Generated {len(subtasks)} subtasks", subtasks=subtasks)
         
         # Initialize progress tracking
         for i in range(self.num_agents):
@@ -215,6 +238,12 @@ class TaskOrchestrator:
         agent_results.sort(key=lambda x: x["agent_id"])
         
         # Aggregate results
+        self.debug_logger.info("Aggregating results from all agents")
         final_result = self.aggregate_results(agent_results)
+        
+        self.debug_logger.info("Orchestration completed", 
+                              final_result_length=len(final_result),
+                              total_agents=len(agent_results))
+        self.debug_logger.log_separator("Orchestration Completed")
         
         return final_result
