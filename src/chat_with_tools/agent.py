@@ -1,7 +1,7 @@
 import json
 import yaml
 from openai import OpenAI
-from src.tools import discover_tools
+from .tools import discover_tools
 
 class OpenRouterAgent:
     def __init__(self, config_path="config.yaml", silent=False):

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A powerful multi-agent AI framework with tool integration, inspired by Grok's deep thinking mode"
 readme = "README.md"
 requires-python = ">=3.9"
-license = {text = "MIT"}
+license = "MIT"
 authors = [
     {name = "Suparious", email = "suparious@solidrust.net"},
 ]
@@ -91,14 +91,12 @@ Repository = "https://github.com/suparious/chat-with-tools.git"
 Changelog = "https://github.com/suparious/chat-with-tools/releases"
 
 [project.scripts]
-chat-with-tools = "main:main"
-cwt = "main:main"
-cwt-single = "demos.main:main"
-cwt-council = "demos.council_chat:main"
-cwt-tools = "demos.demo_standalone:main"
+chat-with-tools = "chat_with_tools.__main__:main"
+cwt = "chat_with_tools.__main__:main"
 
 [tool.setuptools]
-packages = ["src", "src.tools", "demos", "tests"]
+package-dir = {"": "src"}
+packages = ["chat_with_tools", "chat_with_tools.tools"]
 include-package-data = true
 
 [tool.setuptools.package-data]

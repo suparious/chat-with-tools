@@ -4,7 +4,7 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any
-from src.agent import OpenRouterAgent
+from .agent import OpenRouterAgent
 
 class TaskOrchestrator:
     def __init__(self, config_path="config.yaml", silent=False):

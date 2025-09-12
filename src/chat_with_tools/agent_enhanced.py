@@ -5,8 +5,8 @@ import os
 import yaml
 from typing import Dict, Any, List, Optional
 from openai import OpenAI
-from src.tools import discover_tools
-from src.utils import (
+from .tools import discover_tools
+from .utils import (
     setup_logging, 
     retry_with_backoff, 
     get_env_or_config,

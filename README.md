@@ -55,13 +55,46 @@ Deep multi-perspective analysis inspired by Grok
 # Clone the repository
 git clone https://github.com/Suparious/chat-with-tools.git
 cd chat-with-tools
+```
 
-# Install with uv (recommended)
+#### Option 1: Install with uv (Recommended)
+
+```bash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment and install dependencies
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv pip install -r requirements.txt
 
-# Or install with pip
+# Install the package in editable mode
+uv pip install -e .
+
+# Or just install dependencies
+uv pip install -r requirements.txt
+```
+
+#### Option 2: Run directly with uv (No venv needed)
+
+```bash
+# Run without activating a virtual environment
+uv run python main.py
+
+# Or run specific commands
+uv run --with . python -m chat_with_tools
+```
+
+#### Option 3: Install with pip
+
+```bash
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the package
+pip install -e .
+
+# Or just install dependencies
 pip install -r requirements.txt
 ```
 
@@ -295,6 +328,48 @@ chat-with-tools/
 ├── Makefile              # Development commands
 ├── pyproject.toml        # Modern Python packaging
 └── requirements.txt      # Dependencies
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### uv build errors
+
+If you encounter errors like `package directory 'src/src' does not exist`:
+
+```bash
+# Clear any existing build artifacts
+rm -rf src/*.egg-info build/ dist/
+
+# Reinstall in editable mode
+uv pip install -e .
+```
+
+#### Module import errors
+
+If you get import errors when running the code:
+
+```bash
+# Make sure you're in the project root
+cd /path/to/chat-with-tools
+
+# Install the package properly
+uv pip install -e .
+
+# Or run with uv directly
+uv run python main.py
+```
+
+#### API Key not working
+
+```bash
+# Check your config file
+cat config/config.yaml | grep api_key
+
+# Make sure it's not the placeholder
+# Should NOT be: api_key: "YOUR API KEY HERE"
+# Should be: api_key: "sk-or-v1-your-actual-key"
 ```
 
 ## 🧪 Testing
