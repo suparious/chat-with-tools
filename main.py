@@ -293,7 +293,7 @@ class FrameworkLauncher:
         print("   1. Ensure all dependencies are installed:")
         print("      uv pip install -r requirements.txt")
         print("   2. Check that you're in the project directory")
-        print("   3. Verify Python version is 3.8 or higher")
+        print("   3. Verify Python version is 3.9 or higher")
         print("   4. Try running: uv pip install -e .")
     
     def run(self):

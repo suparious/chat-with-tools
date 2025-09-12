@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)](https://www.python.org/downloads/)
+[![Python Version](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Code Style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/Suparious/chat-with-tools/pulls)
@@ -45,7 +45,7 @@ Deep multi-perspective analysis inspired by Grok
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.9 or higher
 - [uv](https://github.com/astral-sh/uv) package manager (recommended)
 - OpenRouter API key ([get one here](https://openrouter.ai/keys))
 
