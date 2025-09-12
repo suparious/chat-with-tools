@@ -208,8 +208,9 @@ class ConfigManager:
         return self.config.get('logging', {})
     
     def get_debug_config(self) -> Dict[str, Any]:
-        """Get debug configuration."""
-        return self.config.get('debug', {})
+        """Get debug configuration from unified logging section."""
+        # Debug config is now nested within logging
+        return self.config.get('logging', {}).get('debug', {})
     
     def get_tools_config(self) -> Dict[str, Any]:
         """Get tools configuration."""

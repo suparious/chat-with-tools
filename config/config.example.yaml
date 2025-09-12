@@ -74,12 +74,6 @@ agent:
   
   # Rate limit (requests per second)
   rate_limit: 10
-  
-  # Show tool execution details
-  verbose: false
-  
-  # Silent mode (suppress all tool output)
-  silent: false
 
 # Multi-Agent Orchestrator Configuration
 # --------------------
@@ -91,9 +85,6 @@ orchestrator:
   # Timeout per agent in seconds
   task_timeout: 300
   
-  # Show detailed progress
-  verbose: true
-
   # Result aggregation strategy
   # Options: "consensus" (AI synthesis), "merge" (simple combination)
   aggregation_strategy: "consensus"
@@ -137,6 +128,65 @@ orchestrator:
     
     Do NOT call any tools or mention that you are synthesizing.
     Simply provide the final synthesized answer directly.
+
+# Unified Logging Configuration
+# --------------------
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Console output settings
+  console:
+    enabled: true
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    colored: true  # Use colored output for better readability
+  
+  # File logging settings
+  file:
+    enabled: false
+    path: "./logs"
+    filename: "chat_with_tools.log"
+    format: "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s | %(message)s"
+    max_size_mb: 10
+    max_files: 5  # Number of files to keep in rotation
+  
+  # Debug mode settings
+  debug:
+    enabled: false  # Master switch for debug mode
+    verbose: false  # Extra verbose output
+    
+    # Component-specific debug settings
+    log_tool_calls: true      # Log all tool invocations and results
+    log_llm_calls: true       # Log LLM API calls and responses
+    log_agent_thoughts: true  # Log agent reasoning and iterations
+    log_orchestrator: true    # Log orchestrator operations
+    
+    # Debug file settings (separate from main log)
+    debug_file:
+      enabled: true
+      path: "./logs/debug"
+      max_size_mb: 20
+      max_files: 10
+  
+  # Development/Testing settings
+  development:
+    # Save API responses for debugging
+    save_responses: false
+    response_dir: "./debug/responses"
+    
+    # Save conversation history
+    save_history: false
+    history_dir: "./chat_history"
+    
+    # Performance profiling
+    profile: false
+    profile_dir: "./debug/profiles"
+    
+    # Trace tool execution
+    trace_tools: false
+    
+    # Mock API calls (for testing)
+    mock_api: false
 
 # Tool Configuration
 # -------------------
@@ -250,21 +300,6 @@ tools:
     default_ratio: 0.3
     max_summary_sentences: 10
 
-# Logging Configuration
-# --------------------
-logging:
-  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-  level: "INFO"
-  
-  # Log file path (null to disable file logging)
-  file: null
-  
-  # Console output
-  console: true
-  
-  # Log format
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
 # Performance Settings
 # -------------------
 performance:
@@ -328,60 +363,3 @@ security:
     
     # Enable rate limiting
     enabled: false
-
-# Development Settings
-# -------------------
-development:
-  # Debug mode (verbose logging)
-  debug: false
-  
-  # Enable tool execution tracing
-  trace_tools: false
-  
-  # Profile performance
-  profile: false
-  
-  # Mock API calls (for testing)
-  mock_api: false
-  
-  # Save API responses
-  save_responses: false
-  
-  # Save conversation history
-  save_history: false
-  
-  # Response directory
-  response_dir: "./debug/responses"
-  
-  # History directory
-  history_dir: "./chat_history"
-
-# Debug logging settings
-# ----------------------
-debug:
-  # Set to true to enable debug logging to disk
-  enabled: false
-  
-  # Directory where log files will be stored
-  log_path: "./logs"
-  
-  # Logging level: DEBUG, INFO, WARNING, ERROR
-  log_level: "DEBUG"
-  
-  # Maximum size of each log file in MB
-  max_log_size_mb: 10
-  
-  # Maximum number of log files to keep (rotation)
-  max_log_files: 5
-  
-  # Include detailed timestamps in logs
-  include_timestamps: true
-  
-  # Log all tool invocations and results
-  log_tool_calls: true
-  
-  # Log LLM API calls and responses
-  log_llm_calls: true
-  
-  # Log agent reasoning and iterations
-  log_agent_thoughts: true

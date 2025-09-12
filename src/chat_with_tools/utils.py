@@ -15,12 +15,14 @@ from urllib.parse import urlparse
 F = TypeVar('F', bound=Callable[..., Any])
 
 
-def setup_logging(name: str, level: str = "INFO", log_file: Optional[str] = None) -> logging.Logger:
+def setup_logging(name: str, config: Optional[Dict[str, Any]] = None, 
+                  level: Optional[str] = None, log_file: Optional[str] = None) -> logging.Logger:
     """
-    Set up a logger with consistent formatting.
+    Set up a logger with consistent formatting using the unified config.
     
     Args:
         name: Logger name (usually __name__)
+        config: Configuration dictionary (if provided, overrides other params)
         level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
         log_file: Optional log file path
         
@@ -28,25 +30,96 @@ def setup_logging(name: str, level: str = "INFO", log_file: Optional[str] = None
         Configured logger instance
     """
     logger = logging.getLogger(name)
+    
+    # If config provided, use it for all settings
+    if config and 'logging' in config:
+        log_config = config['logging']
+        
+        # Set log level
+        if level is None:
+            level = log_config.get('level', 'INFO')
+        
+        # Check if debug mode overrides the level
+        if log_config.get('debug', {}).get('enabled', False):
+            if log_config.get('debug', {}).get('verbose', False):
+                level = 'DEBUG'
+    
+    # Set logger level
     logger.setLevel(getattr(logging, level.upper()))
     
     # Remove existing handlers to avoid duplicates
     logger.handlers.clear()
     
-    # Create formatter
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    # Console handler setup
+    if config and 'logging' in config:
+        console_config = config['logging'].get('console', {})
+        if console_config.get('enabled', True):
+            console_handler = logging.StreamHandler()
+            console_format = console_config.get('format', 
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            
+            # Add color support if requested
+            if console_config.get('colored', False):
+                try:
+                    import colorlog
+                    console_format = '%(log_color)s' + console_format
+                    formatter = colorlog.ColoredFormatter(
+                        console_format,
+                        datefmt='%Y-%m-%d %H:%M:%S',
+                        log_colors={
+                            'DEBUG': 'cyan',
+                            'INFO': 'green',
+                            'WARNING': 'yellow',
+                            'ERROR': 'red',
+                            'CRITICAL': 'red,bg_white',
+                        }
+                    )
+                except ImportError:
+                    formatter = logging.Formatter(console_format, datefmt='%Y-%m-%d %H:%M:%S')
+            else:
+                formatter = logging.Formatter(console_format, datefmt='%Y-%m-%d %H:%M:%S')
+            
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
+    else:
+        # Default console handler if no config
+        console_handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
     
-    # Console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
-    
-    # File handler if specified
-    if log_file:
+    # File handler setup
+    if config and 'logging' in config:
+        file_config = config['logging'].get('file', {})
+        if file_config.get('enabled', False):
+            log_path = Path(file_config.get('path', './logs'))
+            log_path.mkdir(parents=True, exist_ok=True)
+            
+            log_filename = log_path / file_config.get('filename', 'chat_with_tools.log')
+            max_bytes = file_config.get('max_size_mb', 10) * 1024 * 1024
+            backup_count = file_config.get('max_files', 5)
+            
+            file_handler = logging.handlers.RotatingFileHandler(
+                log_filename,
+                maxBytes=max_bytes,
+                backupCount=backup_count
+            )
+            
+            file_format = file_config.get('format',
+                '%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s | %(message)s')
+            file_formatter = logging.Formatter(file_format, datefmt='%Y-%m-%d %H:%M:%S')
+            file_handler.setFormatter(file_formatter)
+            logger.addHandler(file_handler)
+    elif log_file:
+        # Use provided log_file parameter if no config
         file_handler = logging.FileHandler(log_file)
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     
@@ -310,7 +383,7 @@ class MetricsCollector:
 
 
 class DebugLogger:
-    """Debug logger for framework debugging and troubleshooting."""
+    """Debug logger for framework debugging and troubleshooting using unified config."""
     
     _instance = None
     _initialized = False
@@ -322,13 +395,15 @@ class DebugLogger:
         return cls._instance
     
     def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """Initialize the debug logger with configuration."""
+        """Initialize the debug logger with unified configuration."""
         if self._initialized:
             return
             
         self.config = config or {}
-        self.debug_config = self.config.get('debug', {})
+        self.log_config = self.config.get('logging', {})
+        self.debug_config = self.log_config.get('debug', {})
         self.enabled = self.debug_config.get('enabled', False)
+        self.verbose = self.debug_config.get('verbose', False)
         self.logger = None
         
         if self.enabled:
@@ -337,9 +412,15 @@ class DebugLogger:
         self._initialized = True
     
     def _setup_logger(self) -> None:
-        """Set up the debug logger with file rotation."""
+        """Set up the debug logger with file rotation using unified config."""
+        debug_file_config = self.debug_config.get('debug_file', {})
+        
+        if not debug_file_config.get('enabled', True):
+            # Debug file logging is disabled
+            return
+            
         # Create logs directory if it doesn't exist
-        log_path = Path(self.debug_config.get('log_path', './logs'))
+        log_path = Path(debug_file_config.get('path', './logs/debug'))
         log_path.mkdir(parents=True, exist_ok=True)
         
         # Generate log filename with timestamp
@@ -348,12 +429,18 @@ class DebugLogger:
         
         # Create logger
         self.logger = logging.getLogger('chat_with_tools.debug')
-        self.logger.setLevel(getattr(logging, self.debug_config.get('log_level', 'DEBUG')))
+        
+        # Set level based on verbose mode
+        if self.verbose:
+            self.logger.setLevel(logging.DEBUG)
+        else:
+            self.logger.setLevel(getattr(logging, self.log_config.get('level', 'INFO')))
+        
         self.logger.handlers.clear()
         
         # Create rotating file handler
-        max_bytes = self.debug_config.get('max_log_size_mb', 10) * 1024 * 1024
-        backup_count = self.debug_config.get('max_log_files', 5)
+        max_bytes = debug_file_config.get('max_size_mb', 20) * 1024 * 1024
+        backup_count = debug_file_config.get('max_files', 10)
         
         file_handler = logging.handlers.RotatingFileHandler(
             log_file,
@@ -479,7 +566,7 @@ class DebugLogger:
     
     def log_orchestrator_task(self, task_id: str, status: str, details: Optional[Dict[str, Any]] = None) -> None:
         """Log orchestrator task status."""
-        if not self.enabled:
+        if not self.enabled or not self.debug_config.get('log_orchestrator', True):
             return
         
         self.info(

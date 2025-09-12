@@ -11,8 +11,10 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 
-# Add project to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root to the Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 # Import tools directly
 from src.chat_with_tools.tools.sequential_thinking_tool import SequentialThinkingTool

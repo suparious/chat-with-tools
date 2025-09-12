@@ -60,7 +60,7 @@ class OpenRouterAgent:
         self.config_manager = ConfigManager()
         self.config = self.config_manager.config
         
-        # Initialize debug logger
+        # Initialize debug logger (singleton will use the same config)
         self.debug_logger = DebugLogger(self.config)
         self.debug_logger.log_separator(f"Agent Initialization - {name}")
         self.debug_logger.info(f"Initializing OpenRouterAgent", 
@@ -68,9 +68,10 @@ class OpenRouterAgent:
                                silent=silent, 
                                name=name)
         
-        # Set up standard logging
-        log_level = "WARNING" if silent else self.config.get('logging', {}).get('level', 'INFO')
-        self.logger = setup_logging(f"{__name__}.{name}", level=log_level)
+        # Set up standard logging using unified config
+        # Silent mode overrides config level to WARNING
+        log_level = "WARNING" if silent else None
+        self.logger = setup_logging(f"{__name__}.{name}", config=self.config, level=log_level)
         
         # Get API configuration from config manager
         self.api_key = self.config_manager.get_api_key()
