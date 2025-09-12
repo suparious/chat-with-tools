@@ -153,7 +153,7 @@ def test_basic_tool_call():
 def test_with_framework():
     """Test using the enhanced agent with vLLM."""
     
-    from agent_enhanced import OpenRouterAgent
+    from agent import OpenRouterAgent
     
     # Create agent pointing to vLLM
     agent = OpenRouterAgent("config.yaml", silent=False)

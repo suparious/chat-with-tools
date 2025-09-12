@@ -86,6 +86,7 @@ credentials/
 
 # Agent Memory and Data
 agent_memory/
+agent_memory_demo/
 workspace/
 logs/
 *.log

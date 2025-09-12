@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.tools.base_tool import BaseTool
 from src.tools import discover_tools
-from src.agent_enhanced import OpenRouterAgent, ConnectionPool
+from src.agent import OpenRouterAgent, ConnectionPool
 from src.utils import (
     validate_url, 
     get_env_or_config, 
@@ -214,8 +214,8 @@ class TestOpenRouterAgent(unittest.TestCase):
         """Clean up temporary files."""
         os.unlink(self.config_file.name)
     
-    @patch('src.agent_enhanced.ConnectionPool.get_client')
-    @patch('src.agent_enhanced.discover_tools')
+    @patch('src.agent.ConnectionPool.get_client')
+    @patch('src.agent.discover_tools')
     def test_agent_initialization(self, mock_discover, mock_get_client):
         """Test agent initialization."""
         # Mock tools discovery
@@ -235,8 +235,8 @@ class TestOpenRouterAgent(unittest.TestCase):
         self.assertIsNotNone(agent.metrics)
         self.assertIsNotNone(agent.rate_limiter)
     
-    @patch('agent_enhanced.ConnectionPool.get_client')
-    @patch('agent_enhanced.discover_tools')
+    @patch('agent.ConnectionPool.get_client')
+    @patch('agent.discover_tools')
     def test_tool_argument_validation(self, mock_discover, mock_get_client):
         """Test tool argument validation."""
         # Create mock tool
@@ -273,7 +273,7 @@ class TestOpenRouterAgent(unittest.TestCase):
 class TestConnectionPool(unittest.TestCase):
     """Test connection pooling."""
     
-    @patch('src.agent_enhanced.OpenAI')
+    @patch('src.agent.OpenAI')
     def test_connection_reuse(self, mock_openai):
         """Test that connections are reused."""
         # Clear pool
@@ -298,8 +298,8 @@ class TestConnectionPool(unittest.TestCase):
 class TestEndToEnd(unittest.TestCase):
     """End-to-end integration tests."""
     
-    @patch('agent_enhanced.OpenAI')
-    @patch('agent_enhanced.discover_tools')
+    @patch('agent.OpenAI')
+    @patch('agent.discover_tools')
     def test_simple_query_flow(self, mock_discover, mock_openai_class):
         """Test a simple query through the agent."""
         # Set up mocks
