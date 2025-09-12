@@ -34,7 +34,6 @@ classifiers = [
     "Intended Audience :: Science/Research",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
@@ -46,11 +45,13 @@ classifiers = [
 ]
 
 dependencies = [
+    "openai>=1.0.0",
     "requests>=2.31.0",
     "pyyaml>=6.0",
     "colorama>=0.4.6",
     "duckduckgo-search>=3.9.0",
     "rich>=13.0.0",
+    "beautifulsoup4>=4.12.0",
 ]
 
 [project.optional-dependencies]
@@ -95,9 +96,11 @@ chat-with-tools = "chat_with_tools.__main__:main"
 cwt = "chat_with_tools.__main__:main"
 
 [tool.setuptools]
-package-dir = {"": "src"}
 packages = ["chat_with_tools", "chat_with_tools.tools"]
 include-package-data = true
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.setuptools.package-data]
 "*" = ["*.yaml", "*.yml", "*.json", "*.txt", "*.md"]
