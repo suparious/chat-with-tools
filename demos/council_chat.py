@@ -1,7 +1,10 @@
 import time
 import threading
 import sys
-from orchestrator import TaskOrchestrator
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.orchestrator import TaskOrchestrator
 
 class OrchestratorCLI:
     def __init__(self):
@@ -153,7 +156,7 @@ class OrchestratorCLI:
         except Exception as e:
             print(f"Error initializing orchestrator: {e}")
             print("Make sure you have:")
-            print("1. Set your OpenRouter API key in config.yaml")
+            print("1. Set your OpenRouter API key in config/config.yaml")
             print("2. Installed all dependencies with: pip install -r requirements.txt")
             return
         

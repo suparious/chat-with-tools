@@ -4,12 +4,13 @@ import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any
-from agent import OpenRouterAgent
+from src.agent import OpenRouterAgent
 
 class TaskOrchestrator:
     def __init__(self, config_path="config.yaml", silent=False):
         # Load configuration
-        with open(config_path, 'r') as f:
+        config_file = config_path if config_path.startswith('/') else f"config/{config_path}"
+        with open(config_file, 'r') as f:
             self.config = yaml.safe_load(f)
         
         self.num_agents = self.config['orchestrator']['parallel_agents']

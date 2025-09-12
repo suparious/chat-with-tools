@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def setup_environment():
     """Set up environment for enhanced components."""

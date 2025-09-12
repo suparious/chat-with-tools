@@ -1,12 +1,13 @@
 import json
 import yaml
 from openai import OpenAI
-from tools import discover_tools
+from src.tools import discover_tools
 
 class OpenRouterAgent:
     def __init__(self, config_path="config.yaml", silent=False):
         # Load configuration
-        with open(config_path, 'r') as f:
+        config_file = config_path if config_path.startswith('/') else f"config/{config_path}"
+        with open(config_file, 'r') as f:
             self.config = yaml.safe_load(f)
         
         # Silent mode for orchestrator (suppresses debug output)

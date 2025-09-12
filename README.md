@@ -41,7 +41,7 @@ uv pip install -r requirements.txt
 
 3. **Configure API key:**
 ```bash
-# Edit config.yaml and replace YOUR API KEY HERE with your OpenRouter API key
+# Edit config/config.yaml and replace YOUR API KEY HERE with your OpenRouter API key
 ```
 
 ## 🎯 Usage
@@ -51,7 +51,7 @@ uv pip install -r requirements.txt
 Run a single intelligent agent with full tool access:
 
 ```bash
-uv run main.py
+python demos/main.py
 ```
 
 **What it does:**
@@ -71,7 +71,7 @@ Agent: [Uses search tool, analyzes results, provides summary]
 Emulate Grok heavy's deep analysis with 4 parallel intelligent agents:
 
 ```bash
-uv run council_chat.py
+python demos/council_chat.py
 ```
 
 **How Chat with Tools works:**
@@ -141,10 +141,14 @@ graph TD
 | `read_file` | Read file contents | `path`, `head`, `tail` |
 | `write_file` | Create/overwrite files | `path`, `content` |
 | `mark_task_complete` | Signal task completion | `task_summary`, `completion_message` |
+| **`sequential_thinking`** | Step-by-step reasoning with revisions | `action`, `thought`, `confidence` |
+| **`memory`** | Persistent memory storage | `action`, `content`, `tags` |
+| **`python_executor`** | Safe Python code execution | `code`, `description` |
+| **`summarizer`** | Text summarization and analysis | `action`, `text`, `ratio` |
 
 ## ⚙️ Configuration
 
-Edit `config.yaml` to customize behavior:
+Edit `config/config.yaml` to customize behavior:
 
 ```yaml
 # OpenRouter API settings
@@ -302,22 +306,64 @@ synthesis_agent = OpenRouterAgent(silent=False)  # Enable debug output
 ## 📁 Project Structure
 
 ```
-Chat with Tools/
-├── main.py                 # Single agent CLI
-├── council_chat.py         # Multi-agent orchestrator CLI  
-├── agent.py                # Core agent implementation
-├── orchestrator.py         # Multi-agent orchestration logic
-├── config.yaml             # Configuration file
+chat-with-tools/
+├── main.py                 # Main launcher script
 ├── requirements.txt        # Python dependencies
 ├── README.md               # This file
-└── tools/                  # Tool system
-    ├── __init__.py         # Auto-discovery system
-    ├── base_tool.py        # Tool base class
-    ├── search_tool.py      # Web search
-    ├── calculator_tool.py  # Math calculations  
-    ├── read_file_tool.py   # File reading
-    ├── write_file_tool.py  # File writing
-    └── task_done_tool.py   # Task completion
+├── LICENSE                 # License file
+├── .gitignore              # Git ignore file
+├── src/                    # Core framework code
+│   ├── __init__.py         # Package initialization
+│   ├── agent.py            # Core agent implementation
+│   ├── agent_enhanced.py   # Enhanced agent with error handling
+│   ├── orchestrator.py     # Multi-agent orchestration logic
+│   ├── utils.py            # Utility functions
+│   └── tools/              # Tool system
+│       ├── __init__.py     # Auto-discovery system
+│       ├── base_tool.py    # Tool base class
+│       ├── search_tool.py  # Web search tool
+│       ├── calculator_tool.py      # Math calculations
+│       ├── memory_tool.py          # Memory storage
+│       ├── python_executor_tool.py # Python code execution
+│       ├── sequential_thinking_tool.py # Step-by-step reasoning
+│       ├── summarization_tool.py   # Text summarization
+│       ├── read_file_tool.py       # File reading
+│       ├── write_file_tool.py      # File writing
+│       └── task_done_tool.py       # Task completion
+├── demos/                  # Demo applications
+│   ├── main.py             # Simple chat demo
+│   ├── council_chat.py     # Multi-agent orchestrator demo
+│   ├── demo_api.py         # API-based tool demonstrations
+│   ├── demo_enhanced.py    # Enhanced agent demo
+│   ├── demo_new_tools.py   # New tools showcase
+│   └── demo_standalone.py  # Standalone tool demos
+├── tests/                  # Test files
+│   ├── test_framework.py   # Framework tests
+│   └── test_tools.py       # Tool tests
+├── config/                 # Configuration files
+│   ├── config.yaml         # Main configuration
+│   └── config_enhanced.yaml # Enhanced agent configuration
+├── docs/                   # Documentation
+│   ├── NEW_TOOLS.md        # New tools documentation
+│   ├── REVIEW.md           # Code review notes
+│   ├── TESTING_GUIDE.md    # Testing guide
+│   └── vllm/               # vLLM documentation
+│       ├── GPU_SUPPORT_GUIDE.md
+│       ├── ROCM_FIX_GUIDE.md
+│       └── VLLM_INTEGRATION.md
+├── backends/               # Backend integrations
+│   └── vllm/               # vLLM backend files
+│       ├── test_gpu_detection.sh
+│       ├── test_vllm_rocm.sh
+│       ├── vllm.conf.example
+│       ├── vllm_monitor.sh
+│       ├── vllm_rocm.conf.example
+│       ├── vllm_rocm_rx7900.conf
+│       ├── vllm_start_enhanced.sh
+│       ├── vllm_start_rocm.sh
+│       └── vllm_start_universal.sh
+└── agent_memory/           # Persistent memory storage
+    └── memories/           # Memory files
 ```
 
 ## 🤝 Contributing

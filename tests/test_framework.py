@@ -9,10 +9,10 @@ from unittest.mock import Mock, patch, MagicMock
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from tools.base_tool import BaseTool
-from tools import discover_tools
-from agent_enhanced import OpenRouterAgent, ConnectionPool
-from utils import (
+from src.tools.base_tool import BaseTool
+from src.tools import discover_tools
+from src.agent_enhanced import OpenRouterAgent, ConnectionPool
+from src.utils import (
     validate_url, 
     get_env_or_config, 
     format_time_duration,
@@ -146,8 +146,8 @@ class TestBaseTool(unittest.TestCase):
 class TestToolDiscovery(unittest.TestCase):
     """Test automatic tool discovery."""
     
-    @patch('tools.importlib.import_module')
-    @patch('tools.os.listdir')
+    @patch('src.tools.importlib.import_module')
+    @patch('src.tools.os.listdir')
     def test_discover_tools(self, mock_listdir, mock_import):
         """Test tool discovery mechanism."""
         # Mock file listing
@@ -214,8 +214,8 @@ class TestOpenRouterAgent(unittest.TestCase):
         """Clean up temporary files."""
         os.unlink(self.config_file.name)
     
-    @patch('agent_enhanced.ConnectionPool.get_client')
-    @patch('agent_enhanced.discover_tools')
+    @patch('src.agent_enhanced.ConnectionPool.get_client')
+    @patch('src.agent_enhanced.discover_tools')
     def test_agent_initialization(self, mock_discover, mock_get_client):
         """Test agent initialization."""
         # Mock tools discovery
@@ -273,7 +273,7 @@ class TestOpenRouterAgent(unittest.TestCase):
 class TestConnectionPool(unittest.TestCase):
     """Test connection pooling."""
     
-    @patch('agent_enhanced.OpenAI')
+    @patch('src.agent_enhanced.OpenAI')
     def test_connection_reuse(self, mock_openai):
         """Test that connections are reused."""
         # Clear pool

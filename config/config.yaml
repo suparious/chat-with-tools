@@ -1,12 +1,12 @@
 # OpenRouter API settings
 openrouter:
   api_key: ""
-  base_url: "http://localhost:8081/v1"
+  base_url: "http://infer.sbx-1.lq.ca.obenv.net:8000/v1"
   
   # IMPORTANT: When selecting a model, ensure it has a high context window (200k+ tokens recommended)
   # The orchestrator can generate large amounts of results from multiple agents that need to be
   # processed together during synthesis. Low context window models may fail or truncate results.
-  model: "Orion-zhen/DeepHermes-3-Llama-3-8B-Preview-AWQ"
+  model: "NousResearch/Hermes-4-14B"
 
 # System prompt for the agent
 system_prompt: |
@@ -59,3 +59,27 @@ orchestrator:
 search:
   max_results: 5
   user_agent: "Mozilla/5.0 (compatible; OpenRouter Agent)"
+  cache_ttl: 3600
+  max_content_length: 5000
+  request_timeout: 10
+
+# Sequential thinking tool settings
+sequential_thinking:
+  max_thoughts: 50
+  default_confidence: 1.0
+
+# Memory tool settings
+memory:
+  storage_path: "./agent_memory"
+  max_memories: 1000
+
+# Python executor tool settings
+code_execution:
+  timeout: 5
+  max_memory_mb: 100
+  allow_imports: false
+
+# Summarization tool settings
+summarization:
+  default_ratio: 0.3
+  max_summary_sentences: 10

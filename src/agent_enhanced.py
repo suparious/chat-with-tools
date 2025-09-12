@@ -5,8 +5,8 @@ import os
 import yaml
 from typing import Dict, Any, List, Optional
 from openai import OpenAI
-from tools import discover_tools
-from utils import (
+from src.tools import discover_tools
+from src.utils import (
     setup_logging, 
     retry_with_backoff, 
     get_env_or_config,
@@ -55,7 +55,8 @@ class OpenRouterAgent:
         
         # Load configuration
         try:
-            with open(config_path, 'r') as f:
+            config_file = config_path if config_path.startswith('/') else f"config/{config_path}"
+            with open(config_file, 'r') as f:
                 self.config = yaml.safe_load(f)
             self.logger.info(f"Loaded configuration from {config_path}")
         except Exception as e:
