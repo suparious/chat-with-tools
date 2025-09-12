@@ -1,45 +1,79 @@
 # Chat with Tools Framework Configuration
+# ==============================
 # Copy this file to config.yaml and add your API key
+# 
+# This configuration file supports environment variables for sensitive data.
+# Set environment variables to override config values:
+# - OPENROUTER_API_KEY: Your OpenRouter API key
+# - OPENROUTER_BASE_URL: API endpoint URL
+# - OPENROUTER_MODEL: Model to use
 
 # OpenRouter API Configuration
+# -----------------------
 openrouter:
+  # API key for OpenRouter (required for OpenRouter endpoints)
   # Get your API key at: https://openrouter.ai/keys
+  # Set via environment variable OPENROUTER_API_KEY for security
   api_key: "YOUR API KEY HERE"
   
+  # Whether API key is required (set to false for local vLLM endpoints)
   api_key_required: true
 
-  # Base URL for OpenRouter API (usually doesn't need changing)
+  # API endpoint URL
+  # For OpenRouter: https://openrouter.ai/api/v1
+  # For local vLLM: http://localhost:8081/v1
   base_url: "https://openrouter.ai/api/v1"
   
-  # Model to use - any OpenRouter-compatible model
+  # Model selection
+  # IMPORTANT: Choose a model with high context window (200k+ tokens recommended)
+  # for multi-agent orchestration to handle large combined responses
+  # 
   # Popular options:
   #   - openai/gpt-4-mini (balanced)
   #   - openai/gpt-3.5-turbo (fast & cheap)
   #   - anthropic/claude-3.5-sonnet (best reasoning)
+  #   - anthropic/claude-3-opus-20240229 (200k context)
   #   - google/gemini-2.0-flash-001 (very fast)
+  #   - google/gemini-pro-1.5 (1M context)
   #   - meta-llama/llama-3.1-70b (open source)
   model: "openai/gpt-4-mini"
   
   # Temperature for responses (0.0 = deterministic, 1.0 = creative)
   temperature: 0.7
   
-  # Maximum tokens per response
+  # Maximum tokens per response (null for model default)
   max_tokens: 2000
 
-# System prompt for the agent
+# System Prompt
+# -------------
 system_prompt: |
-  You are a helpful research assistant. When users ask questions that require 
-  current information or web search, use the search tool and all other tools available to find relevant 
-  information and provide comprehensive answers based on the results.
+  You are a helpful research assistant with access to various tools.
   
-  IMPORTANT: When you have fully satisfied the user's request and provided a complete answer, 
-  you MUST call the mark_task_complete tool with a summary of what was accomplished and 
-  a final message for the user. This signals that the task is finished.
+  When users ask questions that require current information, web search,
+  calculations, or file operations, use the appropriate tools to gather
+  information and provide comprehensive, accurate answers.
+  
+  IMPORTANT: When you have fully satisfied the user's request and provided
+  a complete answer, you MUST call the mark_task_complete tool with a
+  summary of what was accomplished. This signals that the task is finished.
+  
+  Be thorough, accurate, and cite your sources when using search results.
 
-# Single Agent Configuration
+# Agent Settings
+# --------------
 agent:
-  # Maximum number of tool calls per query
+  # Maximum iterations before forcing completion
   max_iterations: 10
+  
+  # Temperature for response generation (0.0-1.0)
+  # Lower = more focused, Higher = more creative
+  temperature: 0.7
+  
+  # Maximum tokens per response (null for model default)
+  max_tokens: null
+  
+  # Rate limit (requests per second)
+  rate_limit: 10
   
   # Show tool execution details
   verbose: false
@@ -48,75 +82,114 @@ agent:
   silent: false
 
 # Multi-Agent Orchestrator Configuration
+# --------------------
 orchestrator:
-  # Number of parallel agents in council mode
+  # Number of agents to run in parallel
+  # More agents = more comprehensive but slower/costlier
   parallel_agents: 4
   
-  # Timeout per agent (seconds)
+  # Timeout per agent in seconds
   task_timeout: 300
   
   # Show detailed progress
   verbose: true
 
-  aggregation_strategy: "consensus"  # How to combine results
+  # Result aggregation strategy
+  # Options: "consensus" (AI synthesis), "merge" (simple combination)
+  aggregation_strategy: "consensus"
   
   # Dynamic question generation prompt
+  # Used to decompose user queries into specialized sub-questions
   question_generation_prompt: |
-    You are an orchestrator that needs to create {num_agents} different questions 
-    to thoroughly analyze the user's query from multiple perspectives.
+    You are an orchestrator that needs to create {num_agents} different
+    questions to thoroughly analyze this topic from multiple angles.
     
-    Create questions that:
-    1. Cover different aspects of the topic
-    2. Use different analytical approaches
-    3. Provide complementary insights
-    4. Don't significantly overlap
+    Original user query: {user_input}
     
-    User query: {query}
+    Generate exactly {num_agents} different, specific questions that will
+    help gather comprehensive information about this topic. Each question
+    should approach the topic from a different angle:
+    - Research and facts
+    - Analysis and insights
+    - Verification and validation
+    - Alternative perspectives
     
-    Generate exactly {num_agents} questions:
+    Return your response as a JSON array of strings:
+    ["question 1", "question 2", "question 3", "question 4"]
+    
+    Only return the JSON array, nothing else.
   
-  # Response synthesis prompt
+  # Synthesis prompt for combining agent responses
   synthesis_prompt: |
-    You have {num_responses} different AI agents that analyzed the same query 
-    from different perspectives. Synthesize their responses into one comprehensive answer.
+    You have {num_responses} different AI agents that analyzed the same
+    query from different perspectives. Your job is to synthesize their
+    responses into ONE comprehensive final answer.
     
-    Requirements:
-    1. Combine all unique insights
-    2. Resolve any contradictions
-    3. Present a unified, coherent response
-    4. Maintain factual accuracy
-    5. Be comprehensive but concise
+    Here are all the agent responses:
     
-    Original query: {query}
+    {agent_responses}
     
-    Agent responses:
-    {responses}
+    IMPORTANT: Synthesize these into ONE final comprehensive answer that:
+    - Combines the best information from all agents
+    - Resolves any contradictions with the most reliable information
+    - Provides a complete, coherent response
+    - Maintains accuracy and cites sources where appropriate
     
-    Synthesized response:
+    Do NOT call any tools or mention that you are synthesizing.
+    Simply provide the final synthesized answer directly.
 
 # Tool Configuration
+# -------------------
 tools:
   # Web search settings
   search:
     # Maximum results per search
     max_results: 5
     
-    # User agent for web requests
-    user_agent: "Mozilla/5.0 (compatible; ChatWithTools/1.0)"
+    # User agent string for web requests
+    user_agent: "Mozilla/5.0 (compatible; Chat-with-Tools/1.0)"
     
     # Search engine (duckduckgo or google)
     engine: "duckduckgo"
+    
+    # Cache TTL in seconds (3600 = 1 hour)
     cache_ttl: 3600
+    
+    # Maximum content length to fetch (characters)
     max_content_length: 5000
+    
+    # Request timeout in seconds
     request_timeout: 10
+    
+    # Blocked domains for security (partial matches)
+    blocked_domains:
+      - localhost
+      - 127.0.0.1
+      - 0.0.0.0
+      - 192.168.
+      - 10.
+      - 172.16.
+      - internal
+      - .local
   
   # File operations settings
   file:
     # Maximum file size to read (bytes)
-    max_file_size: 1048576  # 1MB
+    max_file_size: 10485760  # 10MB
     
-    # Allowed file extensions
-    allowed_extensions: [".txt", ".md", ".json", ".yaml", ".py", ".js", ".html", ".css"]
+    # Allowed file extensions for read/write operations
+    allowed_extensions:
+      - .txt
+      - .md
+      - .json
+      - .yaml
+      - .yml
+      - .csv
+      - .log
+      - .py
+      - .js
+      - .html
+      - .css
     
     # Sandbox directory for file operations
     sandbox_dir: "./workspace"
@@ -134,6 +207,9 @@ tools:
     
     # Allow file system access
     allow_filesystem: true
+    
+    # Allow imports
+    allow_imports: false
   
   # Memory tool settings
   memory:
@@ -163,7 +239,7 @@ tools:
     # Track confidence scores
     track_confidence: true
 
-  # Python executor tool settings
+  # Code execution tool settings
   code_execution:
     timeout: 5
     max_memory_mb: 100
@@ -175,12 +251,13 @@ tools:
     max_summary_sentences: 10
 
 # Logging Configuration
+# --------------------
 logging:
-  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
   level: "INFO"
   
-  # Log file path
-  file: "./logs/chat-with-tools.log"
+  # Log file path (null to disable file logging)
+  file: null
   
   # Console output
   console: true
@@ -189,18 +266,28 @@ logging:
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 # Performance Settings
+# -------------------
 performance:
-  # Enable caching
+  # Enable connection pooling for API clients
+  connection_pooling: true
+  
+  # Enable response caching
   enable_cache: true
   
-  # Cache TTL (seconds)
+  # Cache TTL in seconds (3600 = 1 hour)
   cache_ttl: 3600
   
   # Connection pool size
   pool_size: 10
   
-  # Request timeout (seconds)
+  # Request timeout in seconds
   request_timeout: 30
+  
+  # Enable metrics collection
+  collect_metrics: true
+  
+  # Maximum concurrent tool executions
+  max_concurrent_tools: 3
   
   # Retry configuration
   retry:
@@ -208,21 +295,28 @@ performance:
     max_retries: 3
     
     # Backoff factor
-    backoff_factor: 2
+    backoff_factor: 2.0
     
     # Maximum backoff (seconds)
     max_backoff: 60
 
 # Security Settings
+# -----------------
 security:
   # Enable input validation
   validate_input: true
+  
+  # Validate all URLs before fetching
+  validate_urls: true
   
   # Maximum input length
   max_input_length: 10000
   
   # Enable output sanitization
   sanitize_output: true
+  
+  # Maximum file size for file operations (bytes)
+  max_file_size: 10485760  # 10MB
   
   # Blocked patterns (regex)
   blocked_patterns: []
@@ -236,9 +330,13 @@ security:
     enabled: false
 
 # Development Settings
+# -------------------
 development:
-  # Debug mode
+  # Debug mode (verbose logging)
   debug: false
+  
+  # Enable tool execution tracing
+  trace_tools: false
   
   # Profile performance
   profile: false
@@ -249,17 +347,41 @@ development:
   # Save API responses
   save_responses: false
   
+  # Save conversation history
+  save_history: false
+  
   # Response directory
   response_dir: "./debug/responses"
+  
+  # History directory
+  history_dir: "./chat_history"
 
 # Debug logging settings
+# ----------------------
 debug:
-  enabled: false  # Set to true to enable debug logging to disk
-  log_path: "./logs"  # Directory where log files will be stored
-  log_level: "DEBUG"  # Logging level: DEBUG, INFO, WARNING, ERROR
-  max_log_size_mb: 10  # Maximum size of each log file in MB
-  max_log_files: 5  # Maximum number of log files to keep (rotation)
-  include_timestamps: true  # Include detailed timestamps in logs
-  log_tool_calls: true  # Log all tool invocations and results
-  log_llm_calls: true  # Log LLM API calls and responses
-  log_agent_thoughts: true  # Log agent reasoning and iterations
+  # Set to true to enable debug logging to disk
+  enabled: false
+  
+  # Directory where log files will be stored
+  log_path: "./logs"
+  
+  # Logging level: DEBUG, INFO, WARNING, ERROR
+  log_level: "DEBUG"
+  
+  # Maximum size of each log file in MB
+  max_log_size_mb: 10
+  
+  # Maximum number of log files to keep (rotation)
+  max_log_files: 5
+  
+  # Include detailed timestamps in logs
+  include_timestamps: true
+  
+  # Log all tool invocations and results
+  log_tool_calls: true
+  
+  # Log LLM API calls and responses
+  log_llm_calls: true
+  
+  # Log agent reasoning and iterations
+  log_agent_thoughts: true

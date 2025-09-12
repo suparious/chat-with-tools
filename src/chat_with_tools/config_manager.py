@@ -187,8 +187,33 @@ class ConfigManager:
         return self.config.get('orchestrator', {
             'parallel_agents': 4,
             'task_timeout': 300,
-            'aggregation_strategy': 'consensus'
+            'aggregation_strategy': 'consensus',
+            'verbose': True
         })
+    
+    def requires_api_key(self) -> bool:
+        """Check if an API key is required."""
+        return self.config['openrouter'].get('api_key_required', True)
+    
+    def get_performance_config(self) -> Dict[str, Any]:
+        """Get performance configuration."""
+        return self.config.get('performance', {})
+    
+    def get_security_config(self) -> Dict[str, Any]:
+        """Get security configuration."""
+        return self.config.get('security', {})
+    
+    def get_logging_config(self) -> Dict[str, Any]:
+        """Get logging configuration."""
+        return self.config.get('logging', {})
+    
+    def get_debug_config(self) -> Dict[str, Any]:
+        """Get debug configuration."""
+        return self.config.get('debug', {})
+    
+    def get_tools_config(self) -> Dict[str, Any]:
+        """Get tools configuration."""
+        return self.config.get('tools', {})
     
     def reload(self) -> None:
         """Reload configuration from file."""
