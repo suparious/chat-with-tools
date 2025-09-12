@@ -17,7 +17,7 @@ def discover_tools(config: dict = None, silent: bool = False) -> Dict[str, BaseT
             
             try:
                 # Import the module
-                module = importlib.import_module(f'.{module_name}', package='tools')
+                module = importlib.import_module(f'.{module_name}', package='chat_with_tools.tools')
                 
                 # Find tool classes that inherit from BaseTool
                 for item_name in dir(module):

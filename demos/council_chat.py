@@ -4,7 +4,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chat_with_tools.orchestrator import TaskOrchestrator
+from src.chat_with_tools.orchestrator import TaskOrchestrator
 
 class OrchestratorCLI:
     def __init__(self):

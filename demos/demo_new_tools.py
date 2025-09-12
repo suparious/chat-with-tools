@@ -16,7 +16,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from pathlib import Path
-from src.agent import OpenRouterAgent
+from src.chat_with_tools.agent import OpenRouterAgent
 
 
 def demo_sequential_thinking():

@@ -5,10 +5,10 @@ import json
 import time
 from typing import Dict, List, Any, Optional
 from .base_tool import BaseTool
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 from bs4 import BeautifulSoup
 import requests
-from utils import validate_url, setup_logging
+from ..utils import validate_url, setup_logging
 
 
 class SearchCache:

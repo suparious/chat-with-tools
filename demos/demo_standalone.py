@@ -15,10 +15,10 @@ from datetime import datetime
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import tools directly
-from chat_with_tools.tools.sequential_thinking_tool import SequentialThinkingTool
-from chat_with_tools.tools.memory_tool import MemoryTool
-from chat_with_tools.tools.python_executor_tool import PythonExecutorTool
-from chat_with_tools.tools.summarization_tool import SummarizationTool
+from src.chat_with_tools.tools.sequential_thinking_tool import SequentialThinkingTool
+from src.chat_with_tools.tools.memory_tool import MemoryTool
+from src.chat_with_tools.tools.python_executor_tool import PythonExecutorTool
+from src.chat_with_tools.tools.summarization_tool import SummarizationTool
 
 
 def print_section(title, emoji="📌"):

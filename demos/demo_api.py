@@ -16,7 +16,7 @@ from typing import Dict, Any, List
 # Add project to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chat_with_tools.agent import OpenRouterAgent
+from src.chat_with_tools.agent import OpenRouterAgent
 
 
 def check_config():
@@ -396,7 +396,7 @@ if __name__ == "__main__":
         # First check if we can import required modules
         try:
             import yaml
-            from chat_with_tools.agent import OpenRouterAgent
+            from src.chat_with_tools.agent import OpenRouterAgent
         except ImportError as e:
             print(f"\n❌ Missing required module: {e}")
             print("\nPlease install dependencies:")

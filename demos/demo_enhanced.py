@@ -50,7 +50,7 @@ def demo_enhanced_agent():
     print("\n🤖 Demo: Enhanced Agent\n" + "="*50)
     
     try:
-        from agent_enhanced import OpenRouterAgent
+        from src.chat_with_tools.agent_enhanced import OpenRouterAgent
         
         # Create agent with enhanced features
         agent = OpenRouterAgent(
@@ -88,7 +88,7 @@ def demo_enhanced_search():
     print("\n🔍 Demo: Enhanced Search Tool\n" + "="*50)
     
     try:
-        from tools.search_tool_enhanced import EnhancedSearchTool
+        from src.chat_with_tools.tools.search_tool_enhanced import EnhancedSearchTool
         import yaml
         
         # Load config
@@ -135,7 +135,7 @@ def run_tests():
     print("\n🧪 Running Test Suite\n" + "="*50)
     
     try:
-        import test_framework
+        from tests import test_framework
         print("Starting tests...\n")
         success = test_framework.run_tests()
         

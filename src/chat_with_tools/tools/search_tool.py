@@ -1,5 +1,5 @@
 from .base_tool import BaseTool
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 from bs4 import BeautifulSoup
 import requests
 import json

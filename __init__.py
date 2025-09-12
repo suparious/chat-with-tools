@@ -19,14 +19,14 @@ if str(package_dir) not in sys.path:
 
 # Core imports for easier access
 try:
-    from src.agent import OpenRouterAgent
-    from src.orchestrator import TaskOrchestrator
-    from src.utils import load_config
+    from src.chat_with_tools.agent import OpenRouterAgent
+    from src.chat_with_tools.orchestrator import TaskOrchestrator
+    from src.chat_with_tools.utils import setup_logging
     
     __all__ = [
         "OpenRouterAgent",
         "TaskOrchestrator",
-        "load_config",
+        "setup_logging",
         "__version__",
     ]
 except ImportError:
@@ -52,7 +52,7 @@ def check_setup():
         issues.append("Configuration file not found at config/config.yaml")
     
     # Check for required directories
-    required_dirs = ["src", "demos", "config", "src/tools"]
+    required_dirs = ["src", "demos", "config", "src/chat_with_tools", "src/chat_with_tools/tools"]
     for dir_name in required_dirs:
         dir_path = project_root / dir_name
         if not dir_path.exists():
