@@ -6,6 +6,8 @@ openrouter:
   # Get your API key at: https://openrouter.ai/keys
   api_key: "YOUR API KEY HERE"
   
+  api_key_required: true
+
   # Base URL for OpenRouter API (usually doesn't need changing)
   base_url: "https://openrouter.ai/api/v1"
   

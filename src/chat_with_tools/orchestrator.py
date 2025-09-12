@@ -5,17 +5,19 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any
 from .agent import OpenRouterAgent
+from .config_manager import ConfigManager
 
 class TaskOrchestrator:
     def __init__(self, config_path="config.yaml", silent=False):
-        # Load configuration
-        config_file = config_path if config_path.startswith('/') else f"config/{config_path}"
-        with open(config_file, 'r') as f:
-            self.config = yaml.safe_load(f)
+        # Use centralized config manager
+        self.config_manager = ConfigManager()
+        self.config = self.config_manager.config
         
-        self.num_agents = self.config['orchestrator']['parallel_agents']
-        self.task_timeout = self.config['orchestrator']['task_timeout']
-        self.aggregation_strategy = self.config['orchestrator']['aggregation_strategy']
+        # Get orchestrator-specific config
+        orchestrator_config = self.config_manager.get_orchestrator_config()
+        self.num_agents = orchestrator_config['parallel_agents']
+        self.task_timeout = orchestrator_config['task_timeout']
+        self.aggregation_strategy = orchestrator_config['aggregation_strategy']
         self.silent = silent
         
         # Track agent progress

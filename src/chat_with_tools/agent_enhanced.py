@@ -6,6 +6,7 @@ import yaml
 from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from .tools import discover_tools
+from .config_manager import ConfigManager, get_openai_client
 from .utils import (
     setup_logging, 
     retry_with_backoff, 
@@ -42,7 +43,7 @@ class OpenRouterAgent:
         Initialize the OpenRouter agent.
         
         Args:
-            config_path: Path to configuration file
+            config_path: Path to configuration file (kept for compatibility)
             silent: If True, suppress debug output
             name: Name for this agent instance (useful for multi-agent scenarios)
         """
@@ -53,30 +54,26 @@ class OpenRouterAgent:
         log_level = "WARNING" if silent else "INFO"
         self.logger = setup_logging(f"{__name__}.{name}", level=log_level)
         
-        # Load configuration
+        # Use centralized config manager
         try:
-            config_file = config_path if config_path.startswith('/') else f"config/{config_path}"
-            with open(config_file, 'r') as f:
-                self.config = yaml.safe_load(f)
-            self.logger.info(f"Loaded configuration from {config_path}")
+            self.config_manager = ConfigManager()
+            self.config = self.config_manager.config
+            self.logger.info(f"Loaded configuration via ConfigManager")
         except Exception as e:
             self.logger.error(f"Failed to load configuration: {e}")
             raise
         
-        # Get API configuration with environment variable support
-        self.api_key = get_env_or_config('OPENROUTER_API_KEY', self.config, 
-                                         self.config.get('openrouter', {}).get('api_key'))
-        self.base_url = get_env_or_config('OPENROUTER_BASE_URL', self.config,
-                                          self.config.get('openrouter', {}).get('base_url'))
-        self.model = get_env_or_config('OPENROUTER_MODEL', self.config,
-                                       self.config.get('openrouter', {}).get('model'))
+        # Get API configuration from config manager
+        self.api_key = self.config_manager.get_api_key()
+        self.base_url = self.config_manager.get_base_url()
+        self.model = self.config_manager.get_model()
         
-        # Validate API configuration
-        if not self.api_key or self.api_key == "":
-            raise ValueError("OpenRouter API key not found. Set OPENROUTER_API_KEY environment variable or update config.yaml")
+        # Validate API configuration if required
+        if self.config_manager.requires_api_key() and not self.api_key:
+            self.logger.warning("API key required but not found. Some endpoints may fail.")
         
-        # Initialize OpenAI client using connection pool
-        self.client = ConnectionPool.get_client(self.base_url, self.api_key)
+        # Initialize OpenAI client using centralized function
+        self.client = get_openai_client()
         self.logger.info(f"Initialized client for model: {self.model}")
         
         # Initialize metrics collector

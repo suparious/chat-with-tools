@@ -2,22 +2,19 @@ import json
 import yaml
 from openai import OpenAI
 from .tools import discover_tools
+from .config_manager import ConfigManager, get_openai_client
 
 class OpenRouterAgent:
     def __init__(self, config_path="config.yaml", silent=False):
-        # Load configuration
-        config_file = config_path if config_path.startswith('/') else f"config/{config_path}"
-        with open(config_file, 'r') as f:
-            self.config = yaml.safe_load(f)
+        # Use centralized config manager
+        self.config_manager = ConfigManager()
+        self.config = self.config_manager.config
         
         # Silent mode for orchestrator (suppresses debug output)
         self.silent = silent
         
-        # Initialize OpenAI client with OpenRouter
-        self.client = OpenAI(
-            base_url=self.config['openrouter']['base_url'],
-            api_key=self.config['openrouter']['api_key']
-        )
+        # Initialize OpenAI client using centralized function
+        self.client = get_openai_client()
         
         # Discover tools dynamically
         self.discovered_tools = discover_tools(self.config, silent=self.silent)
@@ -33,7 +30,7 @@ class OpenRouterAgent:
         """Make OpenRouter API call with tools"""
         try:
             response = self.client.chat.completions.create(
-                model=self.config['openrouter']['model'],
+                model=self.config_manager.get_model(),
                 messages=messages,
                 tools=self.tools
             )

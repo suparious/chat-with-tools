@@ -46,20 +46,24 @@ class FrameworkLauncher:
         if not config_path.exists():
             print("\n⚠️  Configuration file not found!")
             print("   Please copy config/config.example.yaml to config/config.yaml")
-            print("   and add your OpenRouter API key.")
+            print("   and configure your settings.")
             return False
         
-        # Check if API key is configured
+        # Check if API key is configured (but don't block if missing)
         try:
             import yaml
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
                 api_key = config.get('openrouter', {}).get('api_key', '')
+                base_url = config.get('openrouter', {}).get('base_url', '')
+                
                 if api_key == 'YOUR API KEY HERE' or not api_key:
                     print("\n⚠️  OpenRouter API key not configured!")
-                    print("   Please edit config/config.yaml and add your API key.")
+                    print("   If using OpenRouter, please add your API key to config/config.yaml")
                     print("   Get your key at: https://openrouter.ai/keys")
-                    return False
+                    print("\n   Note: You can continue without an API key if using a local vLLM endpoint.")
+                    # Don't return False - just warn and continue
+                    
         except Exception as e:
             print(f"\n⚠️  Error reading configuration: {e}")
             return False
@@ -300,11 +304,15 @@ class FrameworkLauncher:
         """Main run loop"""
         self.show_banner()
         
-        # Check environment on first run
+        # Check environment on first run (now just shows warnings, doesn't block)
         if not self.check_environment():
-            print("\n⚠️  Please fix the configuration issues above before continuing.")
+            print("\n❌ Cannot continue due to critical configuration issues.")
             input("\nPress Enter to exit...")
             return
+        
+        # Add a small pause to let users read any warnings
+        if self.check_environment():
+            time.sleep(2)
         
         while True:
             try:
