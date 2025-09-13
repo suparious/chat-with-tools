@@ -11,16 +11,21 @@ import traceback
 from pathlib import Path
 from datetime import datetime
 
-# Add the project root to the Python path
+# Add both the project root and src directory to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(project_root, 'src')
+
+# Add src path first so imports work correctly
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Import tools directly
-from src.chat_with_tools.tools.sequential_thinking_tool import SequentialThinkingTool
-from src.chat_with_tools.tools.memory_tool import MemoryTool
-from src.chat_with_tools.tools.python_executor_tool import PythonExecutorTool
-from src.chat_with_tools.tools.summarization_tool import SummarizationTool
+# Import tools directly from chat_with_tools (not src.chat_with_tools)
+from chat_with_tools.tools.sequential_thinking_tool import SequentialThinkingTool
+from chat_with_tools.tools.memory_tool import MemoryTool
+from chat_with_tools.tools.python_executor_tool import PythonExecutorTool
+from chat_with_tools.tools.summarization_tool import SummarizationTool
 
 
 def print_section(title, emoji="📌"):

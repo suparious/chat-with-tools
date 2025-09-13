@@ -1,11 +1,17 @@
 import sys
 import os
-# Add the project root to the Python path
+# Add both the project root and src directory to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(project_root, 'src')
+
+# Add src path first so imports work correctly
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.chat_with_tools.agent import OpenRouterAgent
+# Now import directly from chat_with_tools (not src.chat_with_tools)
+from chat_with_tools.agent import OpenRouterAgent
 
 def main():
     """Main entry point for the OpenRouter agent"""

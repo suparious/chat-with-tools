@@ -13,12 +13,18 @@ import traceback
 from pathlib import Path
 from typing import Dict, Any, List
 
-# Add the project root to the Python path
+# Add both the project root and src directory to the Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+src_path = os.path.join(project_root, 'src')
+
+# Add src path first so imports work correctly
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.chat_with_tools.agent import OpenRouterAgent
+# Now import directly from chat_with_tools (not src.chat_with_tools)
+from chat_with_tools.agent import OpenRouterAgent
 
 
 def check_config():
@@ -398,7 +404,7 @@ if __name__ == "__main__":
         # First check if we can import required modules
         try:
             import yaml
-            from src.chat_with_tools.agent import OpenRouterAgent
+            from chat_with_tools.agent import OpenRouterAgent
         except ImportError as e:
             print(f"\n❌ Missing required module: {e}")
             print("\nPlease install dependencies:")
