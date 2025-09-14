@@ -1,6 +1,7 @@
 """
 OpenRouter Agent with enhanced error handling, monitoring, and performance features.
-Consolidated version that includes all features from the enhanced agent.
+Includes optional support for vLLM structured outputs and multiple inference endpoints.
+All enhanced features are backwards compatible and disabled by default.
 """
 
 import json
@@ -8,7 +9,8 @@ import os
 import yaml
 import time
 import threading
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
+from enum import Enum
 from openai import OpenAI
 from .tools import discover_tools
 from .config_manager import ConfigManager, get_openai_client
@@ -21,6 +23,112 @@ from .utils import (
     RateLimiter
 )
 
+# Only import pydantic if needed for structured output
+try:
+    from pydantic import BaseModel, Field, validator
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    PYDANTIC_AVAILABLE = False
+
+
+class ModelType(Enum):
+    """Enumeration of model types for different use cases."""
+    THINKING = "thinking"  # Deep reasoning models (Qwen-QwQ, o1)
+    FAST = "fast"          # Quick response models (gpt-4o-mini, sonnet)
+    BALANCED = "balanced"  # Balanced performance (gpt-4, claude-3)
+    LOCAL = "local"        # Local vLLM models
+    CUSTOM = "custom"      # Custom endpoints
+
+
+class InferenceEndpoint:
+    """Configuration for an inference endpoint."""
+    def __init__(self, name: str, base_url: str, model: str, **kwargs):
+        self.name = name
+        self.base_url = base_url
+        self.model = model
+        self.api_key = kwargs.get('api_key')
+        self.model_type = ModelType(kwargs.get('model_type', 'custom'))
+        self.temperature = kwargs.get('temperature', 0.7)
+        self.max_tokens = kwargs.get('max_tokens')
+        self.supports_tools = kwargs.get('supports_tools', True)
+        self.supports_structured_output = kwargs.get('supports_structured_output', False)
+        self.is_vllm = kwargs.get('is_vllm', False)
+
+
+class MultiEndpointManager:
+    """Manages multiple inference endpoints for different model types."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        """Initialize with configuration."""
+        self.config = config
+        self.endpoints: Dict[str, InferenceEndpoint] = {}
+        self.clients: Dict[str, OpenAI] = {}
+        self._enabled = False
+        self._load_endpoints()
+    
+    def _load_endpoints(self):
+        """Load endpoints from configuration."""
+        # Load primary endpoint from existing config
+        primary_config = self.config.get('openrouter', {})
+        primary_endpoint = InferenceEndpoint(
+            name="primary",
+            base_url=primary_config.get('base_url', 'https://openrouter.ai/api/v1'),
+            model=primary_config.get('model', 'openai/gpt-4-mini'),
+            api_key=primary_config.get('api_key'),
+            model_type='balanced',
+            temperature=primary_config.get('temperature', 0.7),
+            max_tokens=primary_config.get('max_tokens'),
+            supports_tools=True,
+            supports_structured_output=False,
+            is_vllm=primary_config.get('is_vllm', False)
+        )
+        self.endpoints["primary"] = primary_endpoint
+        
+        # Load additional endpoints if configured
+        endpoints_config = self.config.get('inference_endpoints', {})
+        if endpoints_config:
+            self._enabled = True
+            for name, endpoint_data in endpoints_config.items():
+                # Replace environment variables in api_key if present
+                if 'api_key' in endpoint_data and isinstance(endpoint_data['api_key'], str):
+                    if endpoint_data['api_key'].startswith('${') and endpoint_data['api_key'].endswith('}'):
+                        env_var = endpoint_data['api_key'][2:-1]
+                        endpoint_data['api_key'] = os.environ.get(env_var, '')
+                
+                endpoint = InferenceEndpoint(name=name, **endpoint_data)
+                self.endpoints[name] = endpoint
+    
+    def is_enabled(self) -> bool:
+        """Check if multi-endpoint feature is enabled."""
+        return self._enabled
+    
+    def get_client(self, endpoint_name: str = "primary") -> OpenAI:
+        """Get or create a client for the specified endpoint."""
+        if endpoint_name not in self.endpoints:
+            endpoint_name = "primary"  # Fallback to primary
+        
+        if endpoint_name not in self.clients:
+            endpoint = self.endpoints[endpoint_name]
+            self.clients[endpoint_name] = OpenAI(
+                base_url=endpoint.base_url,
+                api_key=endpoint.api_key or 'dummy-key-for-local'
+            )
+        
+        return self.clients[endpoint_name]
+    
+    def get_endpoint(self, endpoint_name: str = "primary") -> InferenceEndpoint:
+        """Get endpoint configuration."""
+        if endpoint_name not in self.endpoints:
+            return self.endpoints["primary"]  # Fallback to primary
+        return self.endpoints[endpoint_name]
+    
+    def get_endpoint_by_type(self, model_type: ModelType) -> Optional[InferenceEndpoint]:
+        """Get the first endpoint matching the specified model type."""
+        for endpoint in self.endpoints.values():
+            if endpoint.model_type == model_type:
+                return endpoint
+        return None
+
 
 class ConnectionPool:
     """Connection pool for OpenAI clients to improve performance."""
@@ -30,7 +138,7 @@ class ConnectionPool:
     @classmethod
     def get_client(cls, base_url: str, api_key: str) -> OpenAI:
         """Get or create a client for the given configuration."""
-        key = f"{base_url}:{api_key[:8] if api_key else 'local'}"  # Use first 8 chars of API key as identifier
+        key = f"{base_url}:{api_key[:8] if api_key else 'local'}"
         
         if key not in cls._instances:
             cls._instances[key] = OpenAI(
@@ -44,7 +152,8 @@ class ConnectionPool:
 class OpenRouterAgent:
     """Enhanced OpenRouter agent with robust error handling and monitoring."""
     
-    def __init__(self, config_path: str = "config.yaml", silent: bool = False, name: str = "Agent"):
+    def __init__(self, config_path: str = "config.yaml", silent: bool = False, name: str = "Agent", 
+                 endpoint_name: Optional[str] = None, use_structured_output: Optional[bool] = None):
         """
         Initialize the OpenRouter agent.
         
@@ -52,6 +161,8 @@ class OpenRouterAgent:
             config_path: Path to configuration file (kept for compatibility)
             silent: If True, suppress debug output
             name: Name for this agent instance (useful for multi-agent scenarios)
+            endpoint_name: Optional name of the inference endpoint to use
+            use_structured_output: Optional override for structured output usage
         """
         self.name = name
         self.silent = silent
@@ -60,7 +171,7 @@ class OpenRouterAgent:
         self.config_manager = ConfigManager()
         self.config = self.config_manager.config
         
-        # Initialize debug logger (singleton will use the same config)
+        # Initialize debug logger
         self.debug_logger = DebugLogger(self.config)
         self.debug_logger.log_separator(f"Agent Initialization - {name}")
         self.debug_logger.info(f"Initializing OpenRouterAgent", 
@@ -68,20 +179,51 @@ class OpenRouterAgent:
                                silent=silent, 
                                name=name)
         
-        # Set up standard logging using unified config
-        # Silent mode overrides config level to WARNING
+        # Set up standard logging
         log_level = "WARNING" if silent else None
         self.logger = setup_logging(f"{__name__}.{name}", config=self.config, level=log_level)
         
-        # Get API configuration from config manager
+        # Initialize multi-endpoint manager
+        self.endpoint_manager = MultiEndpointManager(self.config)
+        
+        # Determine which endpoint to use
+        if endpoint_name and self.endpoint_manager.is_enabled():
+            self.endpoint_name = endpoint_name
+        else:
+            self.endpoint_name = "primary"
+        
+        # Get the endpoint configuration
+        self.endpoint = self.endpoint_manager.get_endpoint(self.endpoint_name)
+        
+        # Determine if structured output should be used
+        vllm_config = self.config.get('vllm_structured_output', {})
+        if use_structured_output is not None:
+            self.use_structured_output = use_structured_output
+        else:
+            self.use_structured_output = (
+                vllm_config.get('enabled', False) and 
+                self.endpoint.supports_structured_output and
+                PYDANTIC_AVAILABLE
+            )
+        
+        # Get API configuration
         self.api_key = self.config_manager.get_api_key()
         self.base_url = self.config_manager.get_base_url()
         self.model = self.config_manager.get_model()
         
+        # Override with endpoint configuration if using multi-endpoint
+        if self.endpoint_manager.is_enabled() and self.endpoint_name != "primary":
+            self.api_key = self.endpoint.api_key or self.api_key
+            self.base_url = self.endpoint.base_url
+            self.model = self.endpoint.model
+        
         self.debug_logger.info(f"API configuration loaded", 
                                model=self.model,
                                base_url=self.base_url,
-                               has_api_key=bool(self.api_key))
+                               has_api_key=bool(self.api_key),
+                               endpoint=self.endpoint_name,
+                               multi_endpoint_enabled=self.endpoint_manager.is_enabled(),
+                               structured_output_enabled=self.use_structured_output)
         
         # Validate API configuration if required
         if self.config_manager.requires_api_key() and not self.api_key:
@@ -93,8 +235,11 @@ class OpenRouterAgent:
             self.client = ConnectionPool.get_client(self.base_url, self.api_key)
             self.debug_logger.info("Using connection pool for API client")
         else:
-            # Use standard client
-            self.client = get_openai_client()
+            # Use standard client or endpoint-specific client
+            if self.endpoint_manager.is_enabled():
+                self.client = self.endpoint_manager.get_client(self.endpoint_name)
+            else:
+                self.client = get_openai_client()
             self.debug_logger.info("Using standard API client")
         
         # Initialize metrics collector if enabled
@@ -124,6 +269,13 @@ class OpenRouterAgent:
         self.temperature = agent_config.get('temperature', 0.7)
         self.max_tokens = agent_config.get('max_tokens', None)
         
+        # Override temperature and max_tokens from endpoint if available
+        if self.endpoint_manager.is_enabled() and self.endpoint_name != "primary":
+            if self.endpoint.temperature is not None:
+                self.temperature = self.endpoint.temperature
+            if self.endpoint.max_tokens is not None:
+                self.max_tokens = self.endpoint.max_tokens
+        
         self.debug_logger.info(f"Agent configuration loaded",
                                max_iterations=self.max_iterations,
                                temperature=self.temperature,
@@ -131,12 +283,13 @@ class OpenRouterAgent:
         self.debug_logger.info("Agent initialization complete")
     
     @retry_with_backoff(max_retries=3, initial_delay=1.0)
-    def call_llm(self, messages: List[Dict[str, Any]]) -> Any:
+    def call_llm(self, messages: List[Dict[str, Any]], force_no_tools: bool = False) -> Any:
         """
         Make OpenRouter API call with tools and retry logic.
         
         Args:
             messages: List of message dictionaries
+            force_no_tools: If True, don't include tools in the request
             
         Returns:
             OpenAI completion response
@@ -158,13 +311,24 @@ class OpenRouterAgent:
                 "temperature": self.temperature
             }
             
-            # Add tools if available
-            if self.tools:
+            # Add tools if available and not forced to exclude
+            if self.tools and not force_no_tools and self.endpoint.supports_tools:
                 request_params["tools"] = self.tools
             
             # Add max_tokens if specified
             if self.max_tokens:
                 request_params["max_tokens"] = self.max_tokens
+            
+            # Add structured output format if using vLLM with structured output
+            if self.use_structured_output and self.endpoint.supports_structured_output:
+                vllm_config = self.config.get('vllm_structured_output', {})
+                backend = vllm_config.get('backend', 'outlines')
+                
+                # Add vLLM-specific parameters for structured output
+                request_params["extra_body"] = {
+                    "guided_json": True,
+                    "guided_decoding_backend": backend
+                }
             
             # Make API call
             response = self.client.chat.completions.create(**request_params)
@@ -276,8 +440,13 @@ class OpenRouterAgent:
             # Handle different argument formats
             if isinstance(raw_args, str):
                 try:
-                    # Try to parse as JSON
                     tool_args = json.loads(raw_args)
+                    # Double-check if the result is still a string (double-encoded JSON)
+                    if isinstance(tool_args, str):
+                        try:
+                            tool_args = json.loads(tool_args)
+                        except:
+                            pass
                 except json.JSONDecodeError:
                     # If it's just a string and the tool expects a 'query' parameter,
                     # wrap it in a dict
@@ -295,7 +464,14 @@ class OpenRouterAgent:
             # Ensure tool_args is a dictionary
             if not isinstance(tool_args, dict):
                 self.logger.error(f"Tool arguments are not a dictionary: {type(tool_args)} - {tool_args}")
-                tool_args = {}
+                # Try one more time to parse if it's a string
+                if isinstance(tool_args, str):
+                    try:
+                        tool_args = json.loads(tool_args)
+                    except:
+                        tool_args = {}
+                else:
+                    tool_args = {}
             
             # Validate arguments if validation is enabled
             if self.config.get('security', {}).get('validate_input', True):
@@ -423,6 +599,7 @@ class OpenRouterAgent:
         
         # Implement agentic loop
         iteration = 0
+        tool_was_used = False
         
         while iteration < self.max_iterations:
             iteration += 1
@@ -451,7 +628,7 @@ class OpenRouterAgent:
                 
                 messages.append(message_dict)
                 
-                # Capture assistant content
+                # Capture assistant content if present
                 if assistant_message.content:
                     full_response_content.append(assistant_message.content)
                 
@@ -461,6 +638,7 @@ class OpenRouterAgent:
                         print(f"🔧 Agent making {len(assistant_message.tool_calls)} tool call(s)")
                         self.logger.info(f"Processing {len(assistant_message.tool_calls)} tool call(s)")
                     
+                    tool_was_used = True
                     task_completed = False
                     
                     for tool_call in assistant_message.tool_calls:
@@ -475,6 +653,23 @@ class OpenRouterAgent:
                         if tool_call.function.name == "mark_task_complete":
                             task_completed = True
                             self.debug_logger.info("Task completion tool called - ending agent loop")
+                            
+                            # If we have tool results but no final response, get one
+                            if tool_was_used and len(full_response_content) == 0:
+                                # Get final response without tools
+                                final_messages = messages + [{
+                                    "role": "system",
+                                    "content": "Please provide a final response summarizing the results."
+                                }]
+                                
+                                try:
+                                    final_response_obj = self.call_llm(final_messages, force_no_tools=True)
+                                    final_content = final_response_obj.choices[0].message.content
+                                    if final_content:
+                                        full_response_content.append(final_content)
+                                except:
+                                    pass
+                            
                             if not self.silent:
                                 print("✅ Task completion tool called - exiting loop")
                                 self.logger.info("Task marked as complete")
@@ -491,12 +686,25 @@ class OpenRouterAgent:
                             self.debug_logger.log_separator(f"Agent Run Completed - {self.name}")
                             return final_response
                     
-                    if task_completed:
-                        return "\n\n".join(full_response_content)
+                    # After tool calls, continue to get the assistant's response
+                    # that incorporates the tool results
+                    if not task_completed:
+                        continue
                 else:
-                    if not self.silent:
-                        print("💭 Agent responded without tool calls - continuing loop")
-                        self.logger.debug("Agent responded without tool calls")
+                    # No tool calls, check if we got a response
+                    if assistant_message.content:
+                        # We have a direct response, we're likely done
+                        if not self.silent:
+                            print("💭 Agent provided direct response")
+                            self.logger.debug("Agent responded without tool calls")
+                        
+                        # If this is the first iteration with a direct answer, we're done
+                        if iteration == 1 or not tool_was_used:
+                            break
+                        
+                        # If tools were used and we got a final response, we're done
+                        if tool_was_used and assistant_message.content:
+                            break
                 
             except Exception as e:
                 self.logger.error(f"Error in agent iteration {iteration}: {e}")
@@ -528,7 +736,10 @@ class OpenRouterAgent:
             self.metrics.record_response_time(execution_time)
         
         # Return accumulated response
-        final_response = "\n\n".join(full_response_content) if full_response_content else "Maximum iterations reached. The agent may be stuck in a loop."
+        if full_response_content:
+            final_response = "\n\n".join(full_response_content)
+        else:
+            final_response = "I apologize, but I couldn't generate a proper response. Please try rephrasing your question."
         
         self.debug_logger.info("Agent run completed (max iterations)", 
                              final_response_length=len(final_response),
@@ -536,6 +747,56 @@ class OpenRouterAgent:
         self.debug_logger.log_separator(f"Agent Run Completed - {self.name}")
         
         return final_response
+    
+    def run_thinking(self, user_input: str, context: Optional[List[Dict[str, Any]]] = None) -> str:
+        """
+        Run the agent using a thinking model for deep reasoning.
+        Automatically switches to a thinking endpoint if available.
+        
+        Args:
+            user_input: User's input message
+            context: Optional conversation context
+            
+        Returns:
+            Complete agent response as a string
+        """
+        # Only try to use thinking endpoint if multi-endpoint is enabled
+        if not self.endpoint_manager.is_enabled():
+            self.logger.debug("Multi-endpoint not configured, using standard run")
+            return self.run(user_input, context)
+        
+        # Try to find a thinking endpoint
+        thinking_endpoint = self.endpoint_manager.get_endpoint_by_type(ModelType.THINKING)
+        if thinking_endpoint:
+            # Temporarily switch to thinking endpoint
+            original_endpoint = self.endpoint_name
+            original_model = self.model
+            original_temp = self.temperature
+            original_max_tokens = self.max_tokens
+            
+            self.endpoint_name = thinking_endpoint.name
+            self.endpoint = thinking_endpoint
+            self.client = self.endpoint_manager.get_client(thinking_endpoint.name)
+            self.model = thinking_endpoint.model
+            self.temperature = thinking_endpoint.temperature or self.temperature
+            self.max_tokens = thinking_endpoint.max_tokens or self.max_tokens
+            
+            try:
+                response = self.run(user_input, context)
+            finally:
+                # Restore original endpoint
+                self.endpoint_name = original_endpoint
+                self.endpoint = self.endpoint_manager.get_endpoint(original_endpoint)
+                self.client = self.endpoint_manager.get_client(original_endpoint)
+                self.model = original_model
+                self.temperature = original_temp
+                self.max_tokens = original_max_tokens
+            
+            return response
+        else:
+            # No thinking endpoint available, use regular run
+            self.logger.warning("No thinking endpoint configured, using regular model")
+            return self.run(user_input, context)
     
     def get_metrics(self) -> Dict[str, Any]:
         """Get agent performance metrics."""

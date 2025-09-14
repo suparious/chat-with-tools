@@ -47,8 +47,17 @@ class SafeExecutor:
     # Dangerous modules to block
     BLOCKED_MODULES = {
         'os', 'sys', 'subprocess', 'socket', 'urllib', 'requests',
-        '__builtins__', '__import__', 'eval', 'exec', 'compile',
-        'open', 'file', 'input', 'raw_input', '__loader__'
+        'eval', 'exec', 'compile', 'open', 'file', 'input', 'raw_input'
+    }
+    
+    # Safe modules that are allowed to be imported
+    SAFE_MODULES = {
+        'math', 'random', 'statistics', 'collections', 'itertools',
+        'json', 'datetime', 'time', 're', 'decimal', 'fractions',
+        'array', 'bisect', 'heapq', 'functools', 'operator',
+        'string', 'textwrap', 'unicodedata', 'struct', 'codecs',
+        'hashlib', 'hmac', 'secrets', 'copy', 'pprint', 'enum',
+        'dataclasses', 'typing', 'numbers', 'cmath', 'csv'
     }
     
     def __init__(self, timeout: int = 5, max_memory_mb: int = 100):
@@ -82,12 +91,15 @@ class SafeExecutor:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name.split('.')[0] in self.BLOCKED_MODULES:
-                        return False, f"Import of '{alias.name}' is not allowed"
+                    module_name = alias.name.split('.')[0]
+                    if module_name not in self.SAFE_MODULES:
+                        return False, f"Import of '{alias.name}' is not allowed. Only safe modules are permitted."
             
             elif isinstance(node, ast.ImportFrom):
-                if node.module and node.module.split('.')[0] in self.BLOCKED_MODULES:
-                    return False, f"Import from '{node.module}' is not allowed"
+                if node.module:
+                    module_name = node.module.split('.')[0]
+                    if module_name not in self.SAFE_MODULES:
+                        return False, f"Import from '{node.module}' is not allowed. Only safe modules are permitted."
             
             elif isinstance(node, ast.Name):
                 if node.id in self.BLOCKED_MODULES:
@@ -96,39 +108,53 @@ class SafeExecutor:
             elif isinstance(node, ast.Attribute):
                 # Check for dangerous attributes like __globals__, __code__, etc.
                 if node.attr.startswith('__') and node.attr.endswith('__'):
-                    if node.attr not in ['__name__', '__doc__', '__class__', '__dict__']:
+                    if node.attr not in ['__name__', '__doc__', '__class__', '__dict__',
+                                          '__module__', '__annotations__', '__init__']:
                         return False, f"Access to '{node.attr}' is not allowed"
         
         return True, None
+    
+    def _restricted_import(self, name, *args, **kwargs):
+        """Restricted import function that only allows safe modules."""
+        if name.split('.')[0] in self.SAFE_MODULES:
+            return __import__(name, *args, **kwargs)
+        else:
+            raise ImportError(f"Import of module '{name}' is not allowed")
     
     def _create_safe_globals(self) -> Dict[str, Any]:
         """Create a safe global namespace for code execution."""
         safe_globals = {}
         
-        # Add safe built-ins
-        for name in self.SAFE_BUILTINS:
-            if name in ['math', 'random', 'statistics', 'collections', 'itertools', 
-                       'json', 'datetime', 'time', 're']:
-                try:
-                    safe_globals[name] = __import__(name)
-                except ImportError:
-                    pass
-            elif name in ['pandas', 'numpy']:
-                try:
-                    if name == 'pandas':
-                        safe_globals['pd'] = __import__('pandas')
-                    elif name == 'numpy':
-                        safe_globals['np'] = __import__('numpy')
-                except ImportError:
-                    pass
+        # Add __import__ with restrictions
+        safe_globals['__import__'] = self._restricted_import
+        
+        # Import commonly used safe modules
+        for module_name in ['math', 'random', 'statistics', 'collections', 'itertools', 
+                           'json', 'datetime', 'time', 're', 'decimal', 'fractions']:
+            try:
+                safe_globals[module_name] = __import__(module_name)
+            except ImportError:
+                pass
+        
+        # Try to import data science libraries if available
+        try:
+            safe_globals['pd'] = __import__('pandas')
+            safe_globals['pandas'] = safe_globals['pd']
+        except ImportError:
+            pass
+        
+        try:
+            safe_globals['np'] = __import__('numpy')
+            safe_globals['numpy'] = safe_globals['np']
+        except ImportError:
+            pass
         
         # Add safe built-in functions
-        safe_builtins = {}
+        safe_builtins = {'__import__': self._restricted_import}
         
         # Get built-in functions from the builtins module
         for name in self.SAFE_BUILTINS:
-            if name not in ['math', 'random', 'statistics', 'collections', 'itertools',
-                           'json', 'datetime', 'time', 're', 'pandas', 'numpy']:
+            if name not in self.SAFE_MODULES:
                 # These are actual built-in functions, not modules
                 if hasattr(builtins, name):
                     safe_builtins[name] = getattr(builtins, name)
@@ -218,8 +244,10 @@ class PythonExecutorTool(BaseTool):
     
     def __init__(self, config: dict):
         self.config = config
-        timeout = config.get('code_execution', {}).get('timeout', 5)
-        max_memory = config.get('code_execution', {}).get('max_memory_mb', 100)
+        timeout = config.get('python_executor', {}).get('timeout', 
+                    config.get('code_execution', {}).get('timeout', 5))
+        max_memory = config.get('python_executor', {}).get('max_memory_mb',
+                        config.get('code_execution', {}).get('max_memory_mb', 100))
         self.executor = SafeExecutor(timeout=timeout, max_memory_mb=max_memory)
     
     @property
@@ -231,7 +259,8 @@ class PythonExecutorTool(BaseTool):
         return """Execute Python code safely in a sandboxed environment.
         
         Available libraries: math, random, statistics, collections, itertools,
-        json, datetime, time, re, pandas (as pd), numpy (as np)
+        json, datetime, time, re, decimal, fractions, pandas (as pd), numpy (as np),
+        and many other safe standard library modules.
         
         Use this for:
         - Mathematical calculations

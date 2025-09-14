@@ -1,0 +1,641 @@
+# Chat with Tools Framework - Complete Configuration Reference
+# ================================================================
+# This file shows ALL available configuration options with detailed explanations.
+# Copy this to config.yaml and customize as needed.
+# Most options have sensible defaults and are optional.
+
+# ================================
+# PRIMARY API CONFIGURATION
+# ================================
+openrouter:
+  # API key for OpenRouter or OpenAI-compatible endpoints
+  # Can be set via OPENROUTER_API_KEY environment variable
+  api_key: "YOUR API KEY HERE"
+  
+  # Whether an API key is required for this endpoint
+  # Set to false for local vLLM or other keyless endpoints
+  api_key_required: true
+
+  # Base URL for the API endpoint
+  # Examples:
+  #   - OpenRouter: https://openrouter.ai/api/v1
+  #   - OpenAI: https://api.openai.com/v1
+  #   - Local vLLM: http://localhost:8000/v1
+  base_url: "https://openrouter.ai/api/v1"
+  
+  # Model to use for completions
+  # Examples:
+  #   - OpenAI: gpt-4, gpt-3.5-turbo
+  #   - Anthropic: claude-3-opus, claude-3-sonnet
+  #   - Google: gemini-pro, gemini-flash
+  #   - Local: meta-llama/Llama-3-8B
+  model: "openai/gpt-4-mini"
+  
+  # Temperature for response generation (0.0-1.0)
+  # Lower = more deterministic, Higher = more creative
+  temperature: 0.7
+  
+  # Maximum tokens per response
+  # null = use model default
+  max_tokens: 2000
+  
+  # Whether this endpoint is a vLLM server
+  is_vllm: false
+
+# ================================
+# MULTIPLE INFERENCE ENDPOINTS (Optional)
+# ================================
+# Configure different endpoints for different model types
+# If not configured, only the primary endpoint above is used
+inference_endpoints:
+  # Fast response models for quick tasks
+  fast:
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "${OPENROUTER_API_KEY}"  # Can use environment variables
+    model: "openai/gpt-4o-mini"
+    model_type: "fast"  # Options: fast, thinking, balanced, local, custom
+    temperature: 0.5
+    max_tokens: 1000
+    supports_tools: true
+    supports_structured_output: false
+    is_vllm: false
+  
+  # Deep reasoning models for complex analysis
+  thinking:
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "${OPENROUTER_API_KEY}"
+    model: "qwen/qwq-32b-preview"  # Or "openai/o1-preview"
+    model_type: "thinking"
+    temperature: 0.7
+    max_tokens: 8000
+    supports_tools: false  # Some thinking models work better without tools
+    supports_structured_output: false
+    is_vllm: false
+  
+  # Balanced performance models
+  balanced:
+    base_url: "https://openrouter.ai/api/v1"
+    api_key: "${OPENROUTER_API_KEY}"
+    model: "anthropic/claude-3.5-sonnet"
+    model_type: "balanced"
+    temperature: 0.7
+    max_tokens: 4000
+    supports_tools: true
+    supports_structured_output: false
+    is_vllm: false
+  
+  # Local vLLM endpoint with structured output support
+  local_structured:
+    base_url: "http://localhost:8000/v1"
+    api_key: ""  # No key needed for local
+    model: "meta-llama/Llama-3.3-70B-Instruct"
+    model_type: "local"
+    temperature: 0.6
+    max_tokens: 4000
+    supports_tools: true
+    supports_structured_output: true
+    is_vllm: true
+
+# ================================
+# vLLM STRUCTURED OUTPUT (Optional)
+# ================================
+# Configuration for vLLM's guided decoding features
+# Only applies when using vLLM endpoints with supports_structured_output: true
+vllm_structured_output:
+  # Master switch for structured outputs
+  enabled: false
+  
+  # Backend for guided decoding
+  # Options: "outlines", "jsonschema", "lm-format-enforcer"
+  backend: "outlines"
+  
+  # Whether to validate responses with Pydantic models
+  validate_with_pydantic: true
+  
+  # Retry on validation failure
+  retry_on_failure: true
+  max_retries: 3
+  
+  # Schema enforcement level
+  # Options: "strict", "lenient", "none"
+  enforcement_level: "strict"
+
+# ================================
+# SYSTEM PROMPT
+# ================================
+# Default system prompt for all agents
+# Can be overridden per agent or per endpoint
+system_prompt: |
+  You are a helpful research assistant with access to various tools.
+  
+  When users ask questions that require current information, web search,
+  calculations, or file operations, use the appropriate tools to gather
+  information and provide comprehensive, accurate answers.
+  
+  IMPORTANT: When you have fully satisfied the user's request and provided
+  a complete answer, you MUST call the mark_task_complete tool with a
+  summary of what was accomplished. This signals that the task is finished.
+  
+  Be thorough, accurate, and cite your sources when using search results.
+
+# ================================
+# AGENT CONFIGURATION
+# ================================
+agent:
+  # Maximum iterations before forcing completion
+  max_iterations: 10
+  
+  # Temperature for response generation (0.0-1.0)
+  # Can be overridden by endpoint settings
+  temperature: 0.7
+  
+  # Maximum tokens per response
+  # null = use model default
+  max_tokens: null
+  
+  # Rate limit (requests per second)
+  rate_limit: 10
+  
+  # Automatic endpoint selection based on query complexity
+  # When true, the agent analyzes queries and picks the best endpoint
+  auto_select_endpoint: false
+  
+  # Query routing rules (when auto_select_endpoint is true)
+  query_routing:
+    # Keywords that trigger thinking model
+    thinking_keywords:
+      - "explain in detail"
+      - "deep analysis"
+      - "step by step"
+      - "reasoning"
+      - "complex"
+      - "philosophical"
+      - "comprehensive"
+    
+    # Keywords that trigger fast model
+    fast_keywords:
+      - "quick"
+      - "simple"
+      - "brief"
+      - "summarize"
+      - "yes or no"
+      - "list"
+      - "define"
+    
+    # Default model type when no keywords match
+    default_type: "balanced"
+
+# ================================
+# ORCHESTRATOR CONFIGURATION
+# ================================
+orchestrator:
+  # Number of agents to run in parallel
+  parallel_agents: 4
+  
+  # Timeout per agent in seconds
+  task_timeout: 300
+  
+  # Show detailed progress during execution
+  verbose: true
+  
+  # Result aggregation strategy
+  # Options: "consensus" (AI synthesis), "merge" (simple combination)
+  aggregation_strategy: "consensus"
+  
+  # Endpoint selection for different agent roles
+  # Only used if inference_endpoints are configured
+  agent_endpoints:
+    research: "balanced"     # Agent 1 uses balanced model
+    analysis: "thinking"     # Agent 2 uses thinking model
+    verification: "fast"     # Agent 3 uses fast model
+    synthesis: "balanced"    # Agent 4 uses balanced model
+  
+  # Dynamic question generation prompt
+  question_generation_prompt: |
+    You are an orchestrator that needs to create {num_agents} different
+    questions to thoroughly analyze this topic from multiple angles.
+    
+    Original user query: {user_input}
+    
+    Generate exactly {num_agents} different, specific questions that will
+    help gather comprehensive information about this topic. Each question
+    should approach the topic from a different angle:
+    - Research and facts
+    - Analysis and insights
+    - Verification and validation
+    - Alternative perspectives
+    
+    Return your response as a JSON array of strings:
+    ["question 1", "question 2", "question 3", "question 4"]
+    
+    Only return the JSON array, nothing else.
+  
+  # Synthesis prompt for combining agent responses
+  synthesis_prompt: |
+    You have {num_responses} different AI agents that analyzed the same
+    query from different perspectives. Your job is to synthesize their
+    responses into ONE comprehensive final answer.
+    
+    Here are all the agent responses:
+    
+    {agent_responses}
+    
+    IMPORTANT: Synthesize these into ONE final comprehensive answer that:
+    - Combines the best information from all agents
+    - Resolves any contradictions with the most reliable information
+    - Provides a complete, coherent response
+    - Maintains accuracy and cites sources where appropriate
+    
+    Do NOT call any tools or mention that you are synthesizing.
+    Simply provide the final synthesized answer directly.
+
+# ================================
+# TOOL-SPECIFIC ENDPOINT OVERRIDES (Optional)
+# ================================
+# Specify which endpoint to use for specific tools
+# Only applies when inference_endpoints are configured
+tool_endpoint_overrides:
+  sequential_thinking: "thinking"  # Use thinking model for this tool
+  python_executor: "fast"          # Use fast model for code execution
+  search_web: "balanced"           # Use balanced model for web search
+  memory: "fast"                   # Use fast model for memory operations
+  summarizer: "fast"               # Use fast model for summarization
+
+# ================================
+# LOGGING CONFIGURATION
+# ================================
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Console output settings
+  console:
+    enabled: true
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    colored: true  # Use colored output for better readability
+  
+  # File logging settings
+  file:
+    enabled: false
+    path: "./logs"
+    filename: "chat_with_tools.log"
+    format: "%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s | %(message)s"
+    max_size_mb: 10
+    max_files: 5  # Number of files to keep in rotation
+  
+  # Debug mode settings
+  debug:
+    enabled: false  # Master switch for debug mode
+    verbose: false  # Extra verbose output
+    
+    # Component-specific debug settings
+    log_tool_calls: true      # Log all tool invocations and results
+    log_llm_calls: true       # Log LLM API calls and responses
+    log_agent_thoughts: true  # Log agent reasoning and iterations
+    log_orchestrator: true    # Log orchestrator operations
+    
+    # Debug file settings (separate from main log)
+    debug_file:
+      enabled: true
+      path: "./logs/debug"
+      max_size_mb: 20
+      max_files: 10
+  
+  # Development/Testing settings
+  development:
+    # Save API responses for debugging
+    save_responses: false
+    response_dir: "./debug/responses"
+    
+    # Save conversation history
+    save_history: false
+    history_dir: "./chat_history"
+    
+    # Performance profiling
+    profile: false
+    profile_dir: "./debug/profiles"
+    
+    # Trace tool execution
+    trace_tools: false
+    
+    # Mock API calls (for testing)
+    mock_api: false
+
+# ================================
+# TOOL CONFIGURATIONS
+# ================================
+tools:
+  # Web search settings
+  search:
+    # Maximum results per search
+    max_results: 5
+    
+    # User agent string for web requests
+    user_agent: "Mozilla/5.0 (compatible; Chat-with-Tools/1.0)"
+    
+    # Search engine (duckduckgo or google)
+    engine: "duckduckgo"
+    
+    # Cache TTL in seconds (3600 = 1 hour)
+    cache_ttl: 3600
+    
+    # Maximum content length to fetch (characters)
+    max_content_length: 5000
+    
+    # Request timeout in seconds
+    request_timeout: 10
+    
+    # Blocked domains for security (partial matches)
+    blocked_domains:
+      - localhost
+      - 127.0.0.1
+      - 0.0.0.0
+      - 192.168.
+      - 10.
+      - 172.16.
+      - internal
+      - .local
+  
+  # File operations settings
+  file:
+    # Maximum file size to read (bytes)
+    max_file_size: 10485760  # 10MB
+    
+    # Allowed file extensions for read/write operations
+    allowed_extensions:
+      - .txt
+      - .md
+      - .json
+      - .yaml
+      - .yml
+      - .csv
+      - .log
+      - .py
+      - .js
+      - .html
+      - .css
+      - .xml
+      - .ini
+      - .conf
+      - .toml
+    
+    # Sandbox directory for file operations
+    # Use "." for current directory or specify absolute path
+    sandbox_dir: "./workspace"
+    
+    # Create sandbox directory if it doesn't exist
+    auto_create_sandbox: true
+  
+  # Python executor settings
+  python_executor:
+    # Execution timeout (seconds)
+    timeout: 5
+    
+    # Maximum memory usage (MB)
+    max_memory_mb: 100
+    
+    # Allow network access in executed code
+    allow_network: false
+    
+    # Allow file system access in executed code
+    allow_filesystem: true
+    
+    # Allow import statements
+    allow_imports: true
+    
+    # Sandboxing mode
+    # Options: "restricted" (safe subset), "full" (all safe modules)
+    sandboxing_mode: "restricted"
+    
+    # Additional allowed modules (extends built-in safe list)
+    extra_allowed_modules:
+      - scipy
+      - matplotlib
+      - seaborn
+  
+  # Memory tool settings
+  memory:
+    # Storage path for memories
+    storage_path: "./agent_memory"
+    
+    # Maximum memories to store
+    max_memories: 1000
+    
+    # Auto-cleanup old memories
+    auto_cleanup: true
+    
+    # Cleanup threshold (days)
+    cleanup_days: 30
+    
+    # Use vector database for semantic search
+    use_vector_db: false
+    
+    # Vector database type (when use_vector_db is true)
+    # Options: "chromadb", "pinecone", "weaviate", "qdrant"
+    vector_db_type: "chromadb"
+    
+    # Vector database configuration
+    vector_db_config:
+      # ChromaDB specific
+      collection_name: "agent_memories"
+      embedding_model: "all-MiniLM-L6-v2"
+      
+      # Pinecone specific (if using Pinecone)
+      # api_key: "${PINECONE_API_KEY}"
+      # environment: "us-west1-gcp"
+      # index_name: "agent-memories"
+  
+  # Sequential thinking settings
+  sequential_thinking:
+    # Maximum thoughts per session
+    max_thoughts: 50
+    
+    # Allow thought revision
+    allow_revision: true
+    
+    # Allow branching thoughts
+    allow_branching: true
+    
+    # Track confidence scores
+    track_confidence: true
+    
+    # Minimum confidence threshold for conclusions
+    min_confidence_threshold: 0.7
+    
+    # Auto-save thinking sessions
+    auto_save_sessions: false
+    sessions_path: "./thinking_sessions"
+
+  # Code execution tool settings (alias for python_executor)
+  code_execution:
+    timeout: 5
+    max_memory_mb: 100
+    allow_imports: true
+
+  # Summarization tool settings
+  summarization:
+    # Default summarization ratio
+    default_ratio: 0.3
+    
+    # Maximum sentences in summary
+    max_summary_sentences: 10
+    
+    # Minimum sentences in summary
+    min_summary_sentences: 1
+    
+    # Algorithm for extractive summarization
+    # Options: "textrank", "frequency", "lsa"
+    algorithm: "textrank"
+
+# ================================
+# PERFORMANCE SETTINGS
+# ================================
+performance:
+  # Enable connection pooling for API clients
+  connection_pooling: true
+  
+  # Enable response caching
+  enable_cache: true
+  
+  # Cache TTL in seconds (3600 = 1 hour)
+  cache_ttl: 3600
+  
+  # Connection pool size
+  pool_size: 10
+  
+  # Request timeout in seconds
+  request_timeout: 30
+  
+  # Enable metrics collection
+  collect_metrics: true
+  
+  # Metrics export format
+  # Options: "json", "prometheus", "statsd"
+  metrics_format: "json"
+  
+  # Maximum concurrent tool executions
+  max_concurrent_tools: 3
+  
+  # Retry configuration
+  retry:
+    # Maximum retries
+    max_retries: 3
+    
+    # Backoff strategy
+    # Options: "exponential", "linear", "constant"
+    strategy: "exponential"
+    
+    # Backoff factor
+    backoff_factor: 2.0
+    
+    # Maximum backoff (seconds)
+    max_backoff: 60
+    
+    # Retry on specific status codes
+    retry_on_status:
+      - 429  # Rate limit
+      - 500  # Server error
+      - 502  # Bad gateway
+      - 503  # Service unavailable
+      - 504  # Gateway timeout
+
+# ================================
+# SECURITY SETTINGS
+# ================================
+security:
+  # Enable input validation
+  validate_input: true
+  
+  # Validate all URLs before fetching
+  validate_urls: true
+  
+  # Maximum input length (characters)
+  max_input_length: 10000
+  
+  # Enable output sanitization
+  sanitize_output: true
+  
+  # Maximum output length (characters)
+  max_output_length: 50000
+  
+  # Maximum file size for file operations (bytes)
+  max_file_size: 10485760  # 10MB
+  
+  # Blocked patterns (regex)
+  # Patterns that should not appear in inputs or outputs
+  blocked_patterns:
+    - "(?i)password[:=]"
+    - "(?i)api[_-]?key[:=]"
+    - "(?i)secret[:=]"
+    - "(?i)token[:=]"
+  
+  # Allowed domains for web requests
+  # If specified, only these domains are allowed
+  allowed_domains: []
+    # - "wikipedia.org"
+    # - "arxiv.org"
+    # - "github.com"
+  
+  # Rate limiting
+  rate_limit:
+    # Requests per minute
+    requests_per_minute: 60
+    
+    # Enable rate limiting
+    enabled: false
+    
+    # Rate limit strategy
+    # Options: "sliding_window", "fixed_window", "token_bucket"
+    strategy: "sliding_window"
+    
+    # Per-user rate limiting (requires user identification)
+    per_user: false
+
+# ================================
+# ADVANCED FEATURES (Experimental)
+# ================================
+advanced:
+  # Enable experimental features
+  experimental_features: false
+  
+  # Multi-modal support (images, audio, etc.)
+  multi_modal:
+    enabled: false
+    supported_types:
+      - image/jpeg
+      - image/png
+      - audio/wav
+      - audio/mp3
+  
+  # Long-term memory with vector database
+  long_term_memory:
+    enabled: false
+    provider: "chromadb"
+    auto_summarize: true
+    max_context_length: 100000
+  
+  # Agent collaboration features
+  collaboration:
+    enabled: false
+    max_agents: 10
+    communication_protocol: "json-rpc"
+  
+  # Custom plugins directory
+  plugins:
+    enabled: false
+    directory: "./plugins"
+    auto_load: true
+  
+  # Webhook notifications
+  webhooks:
+    enabled: false
+    endpoints:
+      on_start: ""
+      on_complete: ""
+      on_error: ""
+    
+  # Telemetry (anonymous usage statistics)
+  telemetry:
+    enabled: false
+    endpoint: "https://telemetry.chat-with-tools.ai"
+    anonymous_id: ""  # Auto-generated if not specified
