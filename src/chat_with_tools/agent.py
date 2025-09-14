@@ -292,13 +292,14 @@ class OpenRouterAgent:
         self.debug_logger.info("Agent initialization complete")
     
     @retry_with_backoff(max_retries=3, initial_delay=1.0)
-    def call_llm(self, messages: List[Dict[str, Any]], force_no_tools: bool = False) -> Any:
+    def call_llm(self, messages: List[Dict[str, Any]], force_no_tools: bool = False, force_no_structured: bool = False) -> Any:
         """
         Make OpenRouter API call with tools and retry logic.
         
         Args:
             messages: List of message dictionaries
             force_no_tools: If True, don't include tools in the request
+            force_no_structured: If True, disable structured output even if configured
             
         Returns:
             OpenAI completion response
@@ -329,7 +330,7 @@ class OpenRouterAgent:
                 request_params["max_tokens"] = self.max_tokens
             
             # Add structured output format if using vLLM with structured output
-            if self.use_structured_output and self.endpoint.supports_structured_output:
+            if self.use_structured_output and self.endpoint.supports_structured_output and not force_no_structured:
                 vllm_config = self.config.get('vllm_structured_output', {})
                 backend = vllm_config.get('backend', 'outlines')
                 
@@ -719,6 +720,7 @@ class OpenRouterAgent:
         # Implement agentic loop
         iteration = 0
         tool_was_used = False
+        structured_tool_executed = False  # Track if we've executed tools from structured output
         
         while iteration < self.max_iterations:
             iteration += 1
@@ -729,11 +731,51 @@ class OpenRouterAgent:
                 self.logger.info(f"Agent iteration {iteration}/{self.max_iterations}")
             
             try:
-                # Call LLM
-                response = self.call_llm(messages)
+                # Call LLM - disable structured output if we've already executed tools from structured output
+                # This allows the model to generate a natural language response after tool execution
+                response = self.call_llm(messages, force_no_structured=structured_tool_executed)
                 
                 # Extract assistant message
                 assistant_message = response.choices[0].message
+                
+                # Check if this is a structured response that needs parsing
+                structured_data = None
+                if self.use_structured_output and assistant_message.content and not assistant_message.tool_calls:
+                    # Try to parse structured response
+                    structured_data = self.parse_structured_response(assistant_message.content)
+                    
+                    if structured_data and structured_data.get('type') == 'tool_call':
+                        # Convert structured response to tool call format
+                        self.logger.debug(f"Parsed structured tool call: {structured_data['tool_name']}")
+                        
+                        # Create a mock tool call object
+                        class MockToolCall:
+                            def __init__(self, tool_name, arguments):
+                                self.id = f"call_{tool_name}_{iteration}"
+                                self.function = type('obj', (object,), {
+                                    'name': tool_name,
+                                    'arguments': json.dumps(arguments) if isinstance(arguments, dict) else arguments
+                                })
+                        
+                        # Create tool call from structured data
+                        tool_call = MockToolCall(structured_data['tool_name'], structured_data['arguments'])
+                        assistant_message.tool_calls = [tool_call]
+                        
+                        # Clear the content since it was structured JSON, not a real response
+                        assistant_message.content = None
+                        
+                        # Mark that we've executed tools from structured output
+                        structured_tool_executed = True
+                        
+                        # Add thought as a separate message if present
+                        if structured_data.get('thought'):
+                            full_response_content.append(f"💭 {structured_data['thought']}")
+                    
+                    elif structured_data and structured_data.get('type') == 'direct_answer':
+                        # Use the answer from structured response
+                        assistant_message.content = structured_data['content']
+                        if structured_data.get('thought'):
+                            assistant_message.content = f"{structured_data['thought']}\n\n{assistant_message.content}"
                 
                 # Add to messages
                 message_dict = {
@@ -741,8 +783,9 @@ class OpenRouterAgent:
                     "content": assistant_message.content
                 }
                 
-                # Add tool calls if present
-                if assistant_message.tool_calls:
+                # Add tool calls if present (but don't add MockToolCall objects directly)
+                if assistant_message.tool_calls and not structured_data:
+                    # Only add real tool calls from API, not our MockToolCall objects
                     message_dict["tool_calls"] = assistant_message.tool_calls
                 
                 messages.append(message_dict)
