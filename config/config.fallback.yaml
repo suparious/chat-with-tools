@@ -1,0 +1,104 @@
+# OpenRouter API settings (Fallback configuration while vLLM server is down)
+# To use this: copy to config.yaml or rename this file to config.yaml
+openrouter:
+  api_key: "${OPENROUTER_API_KEY}"  # Set via environment variable
+  api_key_required: true
+  base_url: "https://openrouter.ai/api/v1"
+  model: "openai/gpt-4o-mini"  # Fast and affordable
+  temperature: 0.6
+  max_tokens: 2000
+  is_vllm: false
+
+# Alternative local configuration
+# Uncomment and modify if a custom server is available:
+# openrouter:
+#   api_key: ""
+#   api_key_required: false
+#   base_url: "http://localhost:8000/v1"
+#   model: "NousResearch/Hermes-4-14B"
+#   temperature: 0.6
+#   max_tokens: 30000
+#   is_vllm: true
+
+# Disable structured output until vLLM server is available
+vllm_structured_output:
+  enabled: false
+  backend: "outlines"
+  validate_with_pydantic: true
+  retry_on_failure: true
+  max_retries: 3
+  enforcement_level: "strict"
+
+# System prompt for the agent
+system_prompt: |
+  You are a helpful research assistant with access to various tools.
+  
+  When users ask questions that require current information, web search,
+  calculations, or file operations, use the appropriate tools to gather
+  information and provide comprehensive, accurate answers.
+  
+  IMPORTANT: When you have fully satisfied the user's request and provided
+  a complete answer, you MUST call the mark_task_complete tool with a
+  summary of what was accomplished. This signals that the task is finished.
+  
+  Be thorough, accurate, and cite your sources when using search results.
+
+# Agent Settings
+agent:
+  max_iterations: 10
+  temperature: 0.7
+  max_tokens: null
+  rate_limit: 10
+  auto_select_endpoint: false
+
+# Minimal tool configuration for testing
+tools:
+  search:
+    max_results: 5
+    engine: "duckduckgo"
+    request_timeout: 10
+  
+  file:
+    max_file_size: 10485760
+    sandbox_dir: "./workspace"
+    auto_create_sandbox: true
+  
+  python_executor:
+    timeout: 5
+    max_memory_mb: 100
+    allow_imports: true
+    sandboxing_mode: "restricted"
+  
+  memory:
+    storage_path: "./agent_memory"
+    max_memories: 1000
+    auto_cleanup: true
+  
+  sequential_thinking:
+    max_thoughts: 50
+    allow_revision: true
+
+# Performance settings
+performance:
+  connection_pooling: false
+  enable_cache: true
+  cache_ttl: 3600
+  collect_metrics: true
+  retry:
+    max_retries: 3
+    strategy: "exponential"
+
+# Security settings
+security:
+  validate_input: true
+  validate_urls: true
+  max_input_length: 10000
+
+# Logging
+logging:
+  level: "INFO"
+  console:
+    enabled: true
+    colored: true
+  debug:
+    enabled: false

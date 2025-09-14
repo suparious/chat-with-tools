@@ -70,6 +70,7 @@ class MultiEndpointManager:
         """Load endpoints from configuration."""
         # Load primary endpoint from existing config
         primary_config = self.config.get('openrouter', {})
+        is_vllm = primary_config.get('is_vllm', False)
         primary_endpoint = InferenceEndpoint(
             name="primary",
             base_url=primary_config.get('base_url', 'https://openrouter.ai/api/v1'),
@@ -79,8 +80,8 @@ class MultiEndpointManager:
             temperature=primary_config.get('temperature', 0.7),
             max_tokens=primary_config.get('max_tokens'),
             supports_tools=True,
-            supports_structured_output=False,
-            is_vllm=primary_config.get('is_vllm', False)
+            supports_structured_output=is_vllm,  # If it's vLLM, it supports structured output
+            is_vllm=is_vllm
         )
         self.endpoints["primary"] = primary_endpoint
         
@@ -206,6 +207,14 @@ class OpenRouterAgent:
                 PYDANTIC_AVAILABLE
             )
         
+        # Log structured output status at INFO level
+        if self.use_structured_output:
+            self.logger.info(f"✅ vLLM Structured Output ENABLED - Backend: {vllm_config.get('backend', 'outlines')}, Enforcement: {vllm_config.get('enforcement_level', 'strict')}")
+        elif vllm_config.get('enabled', False) and not self.endpoint.supports_structured_output:
+            self.logger.warning(f"⚠️  Structured output enabled in config but endpoint '{self.endpoint_name}' doesn't support it")
+        elif vllm_config.get('enabled', False) and not PYDANTIC_AVAILABLE:
+            self.logger.warning("⚠️  Structured output enabled but Pydantic not available - install with: pip install pydantic")
+        
         # Get API configuration
         self.api_key = self.config_manager.get_api_key()
         self.base_url = self.config_manager.get_base_url()
@@ -324,11 +333,76 @@ class OpenRouterAgent:
                 vllm_config = self.config.get('vllm_structured_output', {})
                 backend = vllm_config.get('backend', 'outlines')
                 
-                # Add vLLM-specific parameters for structured output
-                request_params["extra_body"] = {
-                    "guided_json": True,
-                    "guided_decoding_backend": backend
-                }
+                # Log at INFO level when using structured output
+                self.logger.info(f"📝 Using vLLM structured output for this request (backend: {backend})")
+                
+                # The vLLM server with Outlines backend requires a proper schema
+                # It does NOT support simple json_object type
+                try:
+                    if backend == "outlines" and self.tools and not force_no_tools:
+                        # For tool calling, create a schema that matches expected format
+                        tool_names = [tool["function"]["name"] for tool in self.tools if "function" in tool]
+                        
+                        # Basic schema for structured tool calling
+                        schema = {
+                            "type": "object",
+                            "properties": {
+                                "thought": {
+                                    "type": "string",
+                                    "description": "Brief reasoning about the task"
+                                },
+                                "action": {
+                                    "type": "string",
+                                    "enum": ["tool_call", "direct_answer"],
+                                    "description": "Whether to call a tool or answer directly"
+                                },
+                                "tool_name": {
+                                    "type": "string",
+                                    "enum": tool_names,
+                                    "description": "Name of the tool to call (if action is tool_call)"
+                                },
+                                "tool_args": {
+                                    "type": "object",
+                                    "description": "Arguments for the tool (if action is tool_call)"
+                                },
+                                "answer": {
+                                    "type": "string",
+                                    "description": "Direct answer to user (if action is direct_answer)"
+                                }
+                            },
+                            "required": ["thought", "action"]
+                        }
+                        
+                        # Use guided_json with the schema for Outlines backend
+                        request_params["extra_body"] = {
+                            "guided_json": schema,
+                            "guided_decoding_backend": "outlines"
+                        }
+                        self.logger.debug(f"Added guided_json schema for {len(tool_names)} tools")
+                    elif backend != "outlines":
+                        # For other backends, use OpenAI-style format
+                        simple_schema = {
+                            "type": "object",
+                            "properties": {
+                                "response": {"type": "string"}
+                            },
+                            "required": ["response"]
+                        }
+                        request_params["response_format"] = {
+                            "type": "json_schema",
+                            "json_schema": {
+                                "name": "response",
+                                "schema": simple_schema
+                            }
+                        }
+                        self.logger.debug("Added response_format for non-Outlines backend")
+                    else:
+                        # For non-tool requests with Outlines, skip structured output for now
+                        # to avoid crashes until we have a better general-purpose schema
+                        self.logger.debug("Skipping structured output for non-tool request with Outlines")
+                except Exception as e:
+                    self.logger.warning(f"Could not add structured output format: {e}")
+                    # Continue without structured output if there's an issue
             
             # Make API call
             response = self.client.chat.completions.create(**request_params)
@@ -349,6 +423,51 @@ class OpenRouterAgent:
             self.logger.error(f"LLM call failed: {str(e)}")
             self.debug_logger.log_llm_call(self.model, messages, error=str(e))
             raise Exception(f"LLM call failed: {str(e)}")
+    
+    def parse_structured_response(self, response_content: str) -> Optional[Dict[str, Any]]:
+        """
+        Parse a structured response from vLLM.
+        
+        Args:
+            response_content: Raw response content
+            
+        Returns:
+            Parsed structured response or None if not structured
+        """
+        if not self.use_structured_output:
+            return None
+            
+        try:
+            # Try to parse as JSON
+            data = json.loads(response_content)
+            
+            # Check if it's our structured format
+            if isinstance(data, dict) and "action" in data:
+                if data["action"] == "tool_call" and "tool_name" in data and "tool_args" in data:
+                    # Convert to standard tool call format
+                    return {
+                        "type": "tool_call",
+                        "tool_name": data["tool_name"],
+                        "arguments": data.get("tool_args", {}),
+                        "thought": data.get("thought", "")
+                    }
+                elif data["action"] == "direct_answer" and "answer" in data:
+                    # Direct answer without tools
+                    return {
+                        "type": "direct_answer",
+                        "content": data["answer"],
+                        "thought": data.get("thought", "")
+                    }
+            
+            # Return raw parsed data if it's JSON but not our format
+            return data
+            
+        except json.JSONDecodeError:
+            # Not JSON, not structured
+            return None
+        except Exception as e:
+            self.logger.debug(f"Error parsing structured response: {e}")
+            return None
     
     def validate_tool_arguments(self, tool_name: str, tool_args: Dict[str, Any]) -> Dict[str, Any]:
         """
