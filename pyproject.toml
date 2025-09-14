@@ -96,7 +96,7 @@ chat-with-tools = "chat_with_tools.__main__:main"
 cwt = "chat_with_tools.__main__:main"
 
 [tool.setuptools]
-packages = ["chat_with_tools", "chat_with_tools.tools"]
+packages = ["chat_with_tools", "chat_with_tools.tools", "chat_with_tools.examples"]
 include-package-data = true
 
 [tool.setuptools.package-dir]

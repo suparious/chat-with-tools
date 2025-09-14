@@ -13,6 +13,7 @@ import time
 import signal
 import resource
 import multiprocessing
+import builtins
 from typing import Dict, Any, Optional, Tuple
 from contextlib import contextmanager, redirect_stdout, redirect_stderr
 from .base_tool import BaseTool
@@ -123,9 +124,14 @@ class SafeExecutor:
         
         # Add safe built-in functions
         safe_builtins = {}
-        for name in dir(__builtins__):
-            if name in self.SAFE_BUILTINS and name not in self.BLOCKED_MODULES:
-                safe_builtins[name] = getattr(__builtins__, name)
+        
+        # Get built-in functions from the builtins module
+        for name in self.SAFE_BUILTINS:
+            if name not in ['math', 'random', 'statistics', 'collections', 'itertools',
+                           'json', 'datetime', 'time', 're', 'pandas', 'numpy']:
+                # These are actual built-in functions, not modules
+                if hasattr(builtins, name):
+                    safe_builtins[name] = getattr(builtins, name)
         
         safe_globals['__builtins__'] = safe_builtins
         
