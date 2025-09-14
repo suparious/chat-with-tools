@@ -197,6 +197,23 @@ class OpenRouterAgent:
         Returns:
             Validated and potentially sanitized arguments
         """
+        # Ensure tool_args is a dictionary
+        if not isinstance(tool_args, dict):
+            self.logger.warning(f"Tool arguments for {tool_name} are not a dictionary, converting: {type(tool_args)}")
+            if isinstance(tool_args, str):
+                # Try to parse as JSON one more time
+                try:
+                    tool_args = json.loads(tool_args)
+                except:
+                    # If it fails, wrap in a query parameter if applicable
+                    tool = self.discovered_tools.get(tool_name)
+                    if tool and 'query' in tool.parameters.get('properties', {}):
+                        tool_args = {"query": tool_args}
+                    else:
+                        tool_args = {}
+            else:
+                tool_args = {}
+        
         # Get tool schema
         tool = self.discovered_tools.get(tool_name)
         if not tool:
@@ -209,7 +226,13 @@ class OpenRouterAgent:
         # Check required parameters
         for param in required_params:
             if param not in tool_args:
-                raise ValueError(f"Missing required parameter '{param}' for tool '{tool_name}'")
+                # Try to provide a helpful default or error message
+                if param == 'query' and len(tool_args) == 1:
+                    # If there's only one argument and we need 'query', use it
+                    single_key = list(tool_args.keys())[0]
+                    tool_args['query'] = tool_args[single_key]
+                else:
+                    raise ValueError(f"Missing required parameter '{param}' for tool '{tool_name}'")
         
         # Validate parameter types (basic validation)
         validated_args = {}
@@ -248,7 +271,31 @@ class OpenRouterAgent:
         
         try:
             # Parse tool arguments
-            tool_args = json.loads(tool_call.function.arguments)
+            raw_args = tool_call.function.arguments
+            
+            # Handle different argument formats
+            if isinstance(raw_args, str):
+                try:
+                    # Try to parse as JSON
+                    tool_args = json.loads(raw_args)
+                except json.JSONDecodeError:
+                    # If it's just a string and the tool expects a 'query' parameter,
+                    # wrap it in a dict
+                    tool = self.discovered_tools.get(tool_name)
+                    if tool and 'query' in tool.parameters.get('properties', {}):
+                        tool_args = {"query": raw_args}
+                    else:
+                        raise json.JSONDecodeError(f"Could not parse arguments: {raw_args}", raw_args, 0)
+            elif isinstance(raw_args, dict):
+                tool_args = raw_args
+            else:
+                # Convert to dict if possible
+                tool_args = dict(raw_args) if hasattr(raw_args, '__dict__') else {}
+            
+            # Ensure tool_args is a dictionary
+            if not isinstance(tool_args, dict):
+                self.logger.error(f"Tool arguments are not a dictionary: {type(tool_args)} - {tool_args}")
+                tool_args = {}
             
             # Validate arguments if validation is enabled
             if self.config.get('security', {}).get('validate_input', True):
@@ -262,9 +309,27 @@ class OpenRouterAgent:
             if tool_name in self.tool_mapping:
                 if not self.silent:
                     self.logger.debug(f"Executing tool '{tool_name}' with args: {validated_args}")
-                tool_result = self.tool_mapping[tool_name](**validated_args)
-                if self.metrics:
-                    self.metrics.record_tool_call(tool_name)
+                
+                try:
+                    tool_result = self.tool_mapping[tool_name](**validated_args)
+                    
+                    # Ensure tool_result is JSON serializable
+                    if not isinstance(tool_result, (dict, list, str, int, float, bool, type(None))):
+                        # Convert to string if not a basic type
+                        tool_result = str(tool_result)
+                    
+                    if self.metrics:
+                        self.metrics.record_tool_call(tool_name)
+                except TypeError as e:
+                    # Handle cases where arguments don't match tool signature
+                    error_msg = f"Argument mismatch for tool {tool_name}: {str(e)}"
+                    self.logger.error(error_msg)
+                    tool_result = {"error": error_msg}
+                except Exception as e:
+                    # Handle any other tool execution errors
+                    error_msg = f"Tool execution error: {str(e)}"
+                    self.logger.error(f"Error executing tool {tool_name}: {e}")
+                    tool_result = {"error": error_msg}
             else:
                 tool_result = {"error": f"Unknown tool: {tool_name}"}
                 self.logger.error(f"Unknown tool requested: {tool_name}")

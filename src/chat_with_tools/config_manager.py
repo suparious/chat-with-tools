@@ -111,31 +111,31 @@ class ConfigManager:
         Args:
             config: Configuration dictionary to validate
             
-        Raises:
-            ValueError: If required settings are missing or invalid
+        Note:
+            This method now only validates structure and provides warnings
+            rather than raising errors for missing API keys.
         """
         # Check for OpenRouter section
         if 'openrouter' not in config:
-            raise ValueError("Missing 'openrouter' section in configuration")
+            config['openrouter'] = {}
+            print("Warning: Missing 'openrouter' section in configuration, using defaults")
         
         openrouter = config['openrouter']
         
         # Check if API key is required
         api_key_required = openrouter.get('api_key_required', True)
         
-        # Only require API key if explicitly needed
+        # Provide warnings instead of errors for API key issues
         if api_key_required:
             if not openrouter.get('api_key'):
-                raise ValueError(
-                    "OpenRouter API key not configured. Please set it in config.yaml "
-                    "or via OPENROUTER_API_KEY environment variable."
-                )
+                print("\n⚠️  Warning: OpenRouter API key not configured.")
+                print("   Please set it in config.yaml or via OPENROUTER_API_KEY environment variable.")
+                print("   You can continue with a local vLLM endpoint if configured.\n")
             
-            if openrouter.get('api_key') == 'YOUR API KEY HERE':
-                raise ValueError(
-                    "Please replace 'YOUR API KEY HERE' with your actual OpenRouter API key "
-                    "in config.yaml or set OPENROUTER_API_KEY environment variable."
-                )
+            elif openrouter.get('api_key') == 'YOUR API KEY HERE':
+                print("\n⚠️  Warning: Please replace 'YOUR API KEY HERE' with your actual OpenRouter API key")
+                print("   in config.yaml or set OPENROUTER_API_KEY environment variable.")
+                print("   You can continue with a local vLLM endpoint if configured.\n")
         
         # Check for base URL
         if not openrouter.get('base_url'):
